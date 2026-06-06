@@ -1,0 +1,80 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  darkMode: 'class',
+  content: ['./index.html', './src/**/*.{vue,js,ts}'],
+  theme: {
+    extend: {
+      colors: {
+        primary: '#c0c1ff',
+        secondary: '#d0bcff',
+        tertiary: '#ddb7ff',
+        background: '#0c0e14',
+        surface: '#111319',
+        'surface-dim': '#111319',
+        'surface-container': '#1e1f26',
+        'surface-container-low': '#191b22',
+        'surface-container-high': '#282a30',
+        'surface-container-highest': '#33343b',
+        'surface-container-lowest': '#0c0e14',
+        'surface-variant': '#33343b',
+        'on-surface': '#e2e2eb',
+        'on-surface-variant': '#c7c4d7',
+        'on-primary': '#1000a9',
+        'on-secondary': '#3c0091',
+        'on-tertiary': '#490080',
+        'primary-container': '#8083ff',
+        'on-primary-container': '#0d0096',
+        'secondary-container': '#571bc1',
+        'on-secondary-container': '#c4abff',
+        'tertiary-container': '#b76dff',
+        'on-tertiary-container': '#400071',
+        'inverse-primary': '#494bd6',
+        'outline': '#908fa0',
+        'outline-variant': '#464554',
+        error: '#ffb4ab',
+        'error-container': '#93000a',
+        'tactical-red': '#ff4d4d',
+        'tactical-amber': '#ffaa00',
+      },
+      fontFamily: {
+        sans: ['Inter', 'sans-serif'],
+        mono: ['"JetBrains Mono"', 'monospace'],
+      },
+      animation: {
+        'pulse-slow': 'pulse 4s ease-in-out infinite',
+        'spin-slow': 'spin 10s linear infinite',
+        'float': 'float 6s ease-in-out infinite',
+        'orb-breathe': 'orbBreathe 6s ease-in-out infinite',
+        'pulse-ring': 'pulseRing 3s cubic-bezier(0.4, 0, 0.2, 1) infinite',
+        'scanline': 'scanline 3s linear infinite',
+        'waveform': 'waveform 1s ease-in-out infinite',
+      },
+      keyframes: {
+        float: {
+          '0%, 100%': { transform: 'translateY(0)' },
+          '50%': { transform: 'translateY(-10px)' },
+        },
+        orbBreathe: {
+          '0%, 100%': { transform: 'scale(1)', opacity: '0.6' },
+          '50%': { transform: 'scale(1.05)', opacity: '0.8' },
+        },
+        pulseRing: {
+          '0%': { transform: 'scale(0.8)', opacity: '0.8' },
+          '100%': { transform: 'scale(2)', opacity: '0' },
+        },
+        scanline: {
+          '0%': { transform: 'translateY(-100%)' },
+          '100%': { transform: 'translateY(100%)' },
+        },
+        waveform: {
+          '0%, 100%': { transform: 'scaleY(0.3)' },
+          '50%': { transform: 'scaleY(1)' },
+        },
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+    },
+  },
+  plugins: [],
+}
