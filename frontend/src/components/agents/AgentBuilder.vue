@@ -2,12 +2,10 @@
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="open" class="fixed inset-0 z-[100] flex justify-end">
-        <!-- Backdrop -->
         <div @click="$emit('close')" class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
-        <!-- Drawer -->
         <Transition name="drawer">
-          <div v-if="open" class="relative z-10 w-[420px] h-full glass-panel flex flex-col overflow-hidden">
+          <div v-if="open" class="relative z-10 w-[460px] h-full glass-panel flex flex-col overflow-hidden">
             <!-- Header -->
             <div class="px-7 py-6 border-b border-white/5 flex items-center justify-between shrink-0">
               <div>
@@ -23,7 +21,6 @@
 
             <!-- Form -->
             <div class="flex-1 overflow-y-auto p-7 space-y-5">
-              <!-- Agent type toggle -->
               <div class="flex rounded-xl overflow-hidden border border-white/10">
                 <button
                   v-for="t in agentTypes"
@@ -40,86 +37,87 @@
                 </button>
               </div>
 
-            <div>
-              <label class="field-label">Agent Name</label>
-              <input v-model="form.name" type="text" placeholder="e.g. Market Analyst v2" class="field-input" />
-            </div>
-            
-            <!-- Wake Word field -->
-            <div>
-              <label class="field-label">Wake Word (activation name)</label>
-              <input v-model="form.wake_word" type="text" placeholder="e.g. Nova, Aria, Max" class="field-input" />
-              <p class="field-label text-on-surface-variant/60 text-[10px] mt-1">
-                Say this name to activate the agent. Default agent uses 'Nova'
-              </p>
-            </div>
+              <div>
+                <label class="field-label">Agent Name</label>
+                <input v-model="form.name" type="text" placeholder="e.g. Market Analyst v2" class="field-input" />
+              </div>
+
+              <div v-if="form.is_voice_agent">
+                <label class="field-label">Wake Word (activation name)</label>
+                <input v-model="form.wake_word" type="text" placeholder="e.g. Nova, Aria, Max" class="field-input" />
+                <p class="field-label text-on-surface-variant/60 text-[10px] mt-1 normal-case">
+                  Say this name to activate the agent.
+                </p>
+              </div>
 
               <div>
                 <label class="field-label">Description</label>
                 <textarea v-model="form.description" rows="2" placeholder="What does this agent do?" class="field-input resize-none" />
               </div>
 
-               <div>
-                 <label class="field-label">System Prompt</label>
-                 <textarea v-model="form.system_prompt" rows="4" placeholder="Core instructions for this agent…" class="field-input resize-none font-mono text-xs" />
-               </div>
-               
-               <!-- Knowledge Base section -->
-               <div>
-                 <label class="field-label">Knowledge Base</label>
-                 <div class="flex items-center gap-3">
-                   <input type="checkbox" v-model="form.kb_enabled" id="kb" class="w-4 h-4 accent-primary" />
-                   <label for="kb" class="text-sm text-on-surface-variant cursor-pointer">Enable Knowledge Base</label>
-                 </div>
-                 <div v-if="form.kb_enabled" class="mt-4">
-                   <div class="mb-3">
-                     <label class="field-label">Upload Knowledge File</label>
-                     <div class="flex flex-col gap-2">
-                       <div class="flex-1 border border-dashed border-gray-600/50 rounded-xl p-4 text-center cursor-pointer" @click="fileInput.click()">
-                         <p class="text-on-surface-variant/60">Drag and drop PDF or TXT files here, or click to browse</p>
-                         <p class="text-xs text-on-surface-variant/40 mt-1">Accepted: .pdf, .txt</p>
-                         <input
-                           ref="fileInput"
-                           type="file"
-                           accept=".pdf,.txt"
-                           class="hidden"
-                           @change="onFileChange"
-                         />
-                       </div>
-                       <button @click="uploadKBFile" class="px-4 py-2 bg-primary/10 hover:bg-primary/20 rounded text-sm font-medium text-primary transition-colors">
-                         Upload File
-                       </button>
-                     </div>
-                   </div>
-                   <div v-if="form.kb_progress" class="mb-3">
-                     <div class="flex items-center justify-between mb-1">
-                       <span class="text-sm text-on-surface-variant">Uploading...</span>
-                       <span class="text-sm text-primary">{{ Math.round(form.kb_progress * 100) }}%</span>
-                     </div>
-                     <div class="w-full bg-gray-800/50 rounded h-2">
-                       <div
-                         :style="{ width: form.kb_progress * 100 + '%' }"
-                         class="bg-primary rounded h-2"
-                       ></div>
-                     </div>
-                   </div>
-                   <div v-if="form.has_knowledge_base" class="flex items-center justify-between mb-3">
-                     <span class="flex items-center gap-2">
-                       <span class="w-2 h-2 bg-green-400 rounded"></span>
-                       <span class="text-sm text-green-400">Knowledge base active</span>
-                     </span>
-                     <button @click="deleteKB" class="text-sm text-error hover:text-error/80 transition-colors">
-                       Delete Knowledge Base
-                     </button>
-                   </div>
-                 </div>
-               </div>
+              <div>
+                <label class="field-label">System Prompt</label>
+                <textarea v-model="form.system_prompt" rows="4" placeholder="Core instructions for this agent…" class="field-input resize-none font-mono text-xs" />
+              </div>
+
+              <!-- ===== LLM Provider & Key ===== -->
+              <div class="form-group">
+                <label class="field-label">LLM Provider</label>
+                <select v-model="form.llm_provider" class="field-input">
+                  <option value="gemini">Google Gemini</option>
+                  <option value="openai">OpenAI</option>
+                  <option value="claude">Anthropic Claude</option>
+                </select>
+              </div>
+
+              <div class="form-group">
+                <label class="field-label">LLM API Key</label>
+                <select v-model="form.llm_key_id" class="field-input">
+                  <option :value="null">— Select a saved key —</option>
+                  <option
+                    v-for="key in llmKeys"
+                    :key="key.id"
+                    :value="key.id"
+                  >
+                    {{ key.label }} ({{ key.key_preview || '••••' }})
+                  </option>
+                </select>
+                <RouterLink to="/profile" class="add-key-link">+ Add a new key in Profile</RouterLink>
+              </div>
+
+              <!-- ===== TTS Provider & Key (voice only) ===== -->
+              <template v-if="form.is_voice_agent">
+                <div class="form-group">
+                  <label class="field-label">Voice / TTS Provider</label>
+                  <select v-model="form.tts_provider" class="field-input">
+                    <option value="elevenlabs">ElevenLabs</option>
+                    <option value="groq">Groq</option>
+                    <option value="deepgram">Deepgram</option>
+                    <option value="browser">Browser (Free, no key needed)</option>
+                  </select>
+                </div>
+
+                <div class="form-group" v-if="form.tts_provider !== 'browser'">
+                  <label class="field-label">TTS API Key</label>
+                  <select v-model="form.tts_key_id" class="field-input">
+                    <option :value="null">— Select a saved key —</option>
+                    <option
+                      v-for="key in ttsKeys"
+                      :key="key.id"
+                      :value="key.id"
+                    >
+                      {{ key.label }} ({{ key.key_preview || '••••' }})
+                    </option>
+                  </select>
+                  <RouterLink to="/profile" class="add-key-link">+ Add a new key in Profile</RouterLink>
+                </div>
+              </template>
 
               <!-- Voice-specific fields -->
               <template v-if="form.is_voice_agent">
                 <div>
                   <label class="field-label">Voice Language</label>
-                  <select v-model="form.voice_language" class="field-input lang-dropdown">
+                  <select v-model="form.voice_language" class="field-input">
                     <option value="en">GB English</option>
                     <option value="hi">IN Hindi</option>
                     <option value="mr">IN Marathi</option>
@@ -156,6 +154,36 @@
               </div>
 
               <p v-if="error" class="text-error text-sm">{{ error }}</p>
+
+              <!-- Test panel (edit mode only) -->
+              <div v-if="isEdit" class="test-panel">
+                <h3 class="test-title">
+                  <span class="material-symbols-outlined">science</span>
+                  Test Agent
+                </h3>
+                <p class="test-desc">Send a prompt directly to the agent and see its response.</p>
+
+                <div class="test-input-row">
+                  <input
+                    v-model="testInput"
+                    type="text"
+                    placeholder="Type a message for this agent…"
+                    class="field-input"
+                    @keydown.enter="testAgent"
+                  />
+                  <button @click="testAgent" :disabled="testLoading || !testInput.trim()" class="btn-primary test-btn">
+                    <span v-if="testLoading" class="material-symbols-outlined text-sm animate-spin">refresh</span>
+                    <span v-else class="material-symbols-outlined text-sm">send</span>
+                    {{ testLoading ? 'Sending…' : 'Test' }}
+                  </button>
+                </div>
+
+                <div v-if="testError" class="test-error">⚠️ {{ testError }}</div>
+                <div v-if="testResponse" class="test-response">
+                  <span class="material-symbols-outlined">smart_toy</span>
+                  <span class="test-response-text">{{ testResponse }}</span>
+                </div>
+              </div>
             </div>
 
             <!-- Footer -->
@@ -177,8 +205,9 @@
 </template>
 
 <script setup>
-import { ref, watch } from 'vue'
+import { ref, watch, onMounted, computed } from 'vue'
 import { apiFetch } from '@/composables/useApi'
+import { useApiKeys } from '@/composables/useApiKeys'
 import { useToastStore } from '@/stores/toast'
 
 const props = defineProps({
@@ -191,22 +220,88 @@ const loading = ref(false)
 const error = ref('')
 const isEdit = ref(false)
 
+const { apiKeys, fetchKeys } = useApiKeys()
+
+const LLM_PROVIDERS = ['gemini', 'openai', 'claude']
+const TTS_PROVIDERS = ['elevenlabs', 'groq', 'azure_tts', 'deepgram']
+
+const llmKeys = computed(() =>
+  apiKeys.value.filter(k => LLM_PROVIDERS.includes(k.provider))
+)
+const ttsKeys = computed(() =>
+  apiKeys.value.filter(k => TTS_PROVIDERS.includes(k.provider))
+)
+
+const testInput = ref('')
+const testResponse = ref('')
+const testError = ref('')
+const testLoading = ref(false)
+
+function resetTest() {
+  testInput.value = ''
+  testResponse.value = ''
+  testError.value = ''
+}
+
+async function testAgent() {
+  if (!testInput.value.trim() || !props.agent?.uuid) return
+  testLoading.value = true
+  testError.value = ''
+  testResponse.value = ''
+  try {
+    const res = await apiFetch(`/api/v1/agents/${props.agent.uuid}/test`, {
+      method: 'POST',
+      body: JSON.stringify({
+        text: testInput.value,
+        language: form.value.voice_language || 'en'
+      })
+    })
+    testResponse.value = typeof res === 'string'
+      ? res
+      : (res?.response || res?.message || res?.text || JSON.stringify(res))
+  } catch (err) {
+    testError.value = err.message || 'Test failed. Check that API keys are attached to this agent.'
+  } finally {
+    testLoading.value = false
+  }
+}
+
 const defaultForm = () => ({
   name: '', description: '', agent_type: 'business_intel', system_prompt: '',
   tools_enabled: ['web_search', 'memory'], output_format: 'markdown',
   is_public: false, is_voice_agent: false, voice_language: 'en',
   voice_system_prompt: '', knowledge_base_text: '',
-  wake_word: 'Nova', // Default wake word
-  kb_enabled: false,
-  kb_progress: 0,
-  has_knowledge_base: false
+  wake_word: 'Nova',
+  llm_provider: 'gemini',
+  llm_key_id: null,
+  tts_provider: 'browser',
+  tts_key_id: null,
+  stt_provider: 'groq',
+  stt_key_id: null,
 })
 
 const form = ref(defaultForm())
 
+function _coerceKeyId(v) {
+  if (v === null || v === undefined || v === '') return null
+  const n = Number(v)
+  return Number.isFinite(n) ? n : null
+}
+
 watch(() => props.agent, (a) => {
-  if (a) { isEdit.value = true; form.value = { ...defaultForm(), ...a } }
-  else { isEdit.value = false; form.value = defaultForm() }
+  if (a) {
+    isEdit.value = true
+    form.value = {
+      ...defaultForm(),
+      ...a,
+      llm_key_id: a.llm_key_id ?? null,
+      tts_key_id: a.tts_key_id ?? null,
+    }
+  } else {
+    isEdit.value = false
+    form.value = defaultForm()
+  }
+  resetTest()
 }, { immediate: true })
 
 const agentTypes = [
@@ -215,94 +310,22 @@ const agentTypes = [
 ]
 const availableTools = ['web_search', 'memory', 'critic', 'formatter', 'planner']
 
-async function uploadKBFile() {
-  const fileInput = document.getElementById('kb-file-input')
-  if (!fileInput || !fileInput.files || fileInput.files.length === 0) {
-    toast.show('Please select a file to upload', 'error')
-    return
-  }
-  
-  const file = fileInput.files[0]
-  const formData = new FormData()
-  formData.append('file', file)
-  
-  try {
-    loading.value = true
-    error.value = ''
-    
-    // Reset progress
-    form.kb_progress = 0
-    
-    // Simulate upload progress (in a real app, you'd use xhr.upload.onprogress)
-    const progressInterval = setInterval(() => {
-      if (form.kb_progress < 0.9) {
-        form.kb_progress += 0.05
-      }
-    }, 100)
-    
-    const res = await fetch(
-      `/api/v1/agents/${props.agent.uuid}/kb/upload`,
-      {
-        method: 'POST',
-        headers: {
-          // Don't set Content-Type - let browser set it with boundary
-          Authorization: `Bearer ${localStorage.getItem('token')}`
-        },
-        body: formData
-      }
-    )
-    
-    clearInterval(progressInterval)
-    form.kb_progress = 1
-    
-    if (!res.ok) {
-      throw new Error(`Upload failed: ${res.status}`)
-    }
-    
-    const data = await res.json()
-    form.has_knowledge_base = true
-    toast.show('Knowledge base updated', 'success')
-  } catch (err) {
-    console.error('KB upload error:', err)
-    toast.show(err.message || 'Failed to upload knowledge base', 'error')
-  } finally {
-    loading.value = false
-    // Reset progress after a delay
-    setTimeout(() => {
-      form.kb_progress = 0
-    }, 1000)
-  }
-}
-
-async function deleteKB() {
-  if (!window.confirm('Are you sure you want to delete the knowledge base? This action cannot be undone.')) {
-    return
-  }
-  
-  try {
-    loading.value = true
-    error.value = ''
-    
-    await apiFetch(
-      `/api/v1/agents/${props.agent.uuid}/kb`,
-      { method: 'DELETE' }
-    )
-    
-    form.has_knowledge_base = false
-    toast.show('Knowledge base deleted', 'success')
-  } catch (err) {
-    console.error('KB delete error:', err)
-    toast.show(err.message || 'Failed to delete knowledge base', 'error')
-  } finally {
-    loading.value = false
-  }
-}
+onMounted(() => { fetchKeys() })
 
 async function save() {
   if (!form.value.name.trim()) { error.value = 'Name is required'; return }
   loading.value = true; error.value = ''
   try {
-    const payload = { ...form.value }
+    const payload = {
+      ...form.value,
+      // Always include key assignment fields with coerced numeric IDs
+      llm_provider: form.value.llm_provider || 'gemini',
+      llm_key_id:   _coerceKeyId(form.value.llm_key_id),
+      tts_provider: form.value.tts_provider || 'browser',
+      tts_key_id:   _coerceKeyId(form.value.tts_key_id),
+      stt_provider: form.value.stt_provider || 'groq',
+      stt_key_id:   _coerceKeyId(form.value.stt_key_id),
+    }
     const data = isEdit.value
       ? await apiFetch(`/api/v1/agents/${props.agent.uuid}`, { method: 'PUT', body: JSON.stringify(payload) })
       : await apiFetch('/api/v1/agents', { method: 'POST', body: JSON.stringify(payload) })
@@ -318,6 +341,138 @@ async function save() {
 </script>
 
 <style scoped>
-.field-label { @apply block font-mono text-[10px] uppercase tracking-widest text-on-surface-variant mb-1.5; }
-.field-input { @apply w-full bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-on-surface placeholder:text-on-surface-variant/40 outline-none focus:border-primary/30 transition-colors; }
+.field-label {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: #c7c4d7;
+  margin-bottom: 6px;
+}
+
+.field-label.normal-case {
+  text-transform: none;
+  letter-spacing: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: 11px;
+}
+
+.field-input {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #e2e2eb;
+  outline: none;
+  transition: border-color 0.15s ease;
+  font-family: inherit;
+}
+
+.field-input:focus {
+  border-color: rgba(192, 193, 255, 0.4);
+}
+
+.form-group {
+  display: block;
+}
+
+.add-key-link {
+  display: inline-block;
+  margin-top: 6px;
+  font-size: 11px;
+  color: #c0c1ff;
+  text-decoration: none;
+  opacity: 0.8;
+}
+
+.add-key-link:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.test-panel {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: 18px;
+  margin-top: 6px;
+}
+
+.test-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 4px;
+}
+
+.test-title .material-symbols-outlined {
+  font-size: 18px;
+  color: #c0c1ff;
+}
+
+.test-desc {
+  font-size: 12px;
+  color: #908fa0;
+  margin-bottom: 12px;
+  line-height: 1.4;
+}
+
+.test-input-row {
+  display: flex;
+  gap: 8px;
+}
+
+.test-input-row .field-input {
+  flex: 1;
+}
+
+.test-btn {
+  white-space: nowrap;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.test-error {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: 8px;
+  color: #fca5a5;
+  font-size: 12px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.test-response {
+  margin-top: 10px;
+  padding: 12px;
+  background: rgba(192, 193, 255, 0.06);
+  border: 1px solid rgba(192, 193, 255, 0.15);
+  border-radius: 10px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  color: #fff;
+  line-height: 1.5;
+}
+
+.test-response .material-symbols-outlined {
+  font-size: 18px;
+  color: #c0c1ff;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.test-response-text {
+  flex: 1;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
 </style>

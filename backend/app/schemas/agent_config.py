@@ -21,6 +21,13 @@ class AgentConfigCreate(BaseModel):
     kb_enabled: bool = False
     wake_confirm_message: str = "Hey {agent_name}"
     welcome_message: str = "How can I help you today?"
+    # API key assignment fields
+    llm_provider: Optional[str] = "gemini"
+    llm_key_id: Optional[int] = None
+    tts_provider: Optional[str] = "browser"
+    tts_key_id: Optional[int] = None
+    stt_provider: Optional[str] = "groq"
+    stt_key_id: Optional[int] = None
 
 
 class AgentConfigUpdate(BaseModel):
@@ -40,6 +47,13 @@ class AgentConfigUpdate(BaseModel):
     kb_enabled: Optional[bool] = None
     wake_confirm_message: Optional[str] = None
     welcome_message: Optional[str] = None
+    # API key assignment fields
+    llm_provider: Optional[str] = None
+    llm_key_id: Optional[int] = None
+    tts_provider: Optional[str] = None
+    tts_key_id: Optional[int] = None
+    stt_provider: Optional[str] = None
+    stt_key_id: Optional[int] = None
 
 
 class AgentConfigResponse(BaseModel):
@@ -70,5 +84,13 @@ class AgentConfigResponse(BaseModel):
     kb_collection_name: Optional[str]
     wake_confirm_message: str
     welcome_message: str
+    # API key assignment fields (joined from agent_api_key_assignments)
+    has_key_assignment: bool = False
+    llm_provider: Optional[str] = None
+    tts_provider: Optional[str] = None
+    stt_provider: Optional[str] = None
+    llm_key_id: Optional[int] = None
+    tts_key_id: Optional[int] = None
+    stt_key_id: Optional[int] = None
 
     model_config = {"from_attributes": True}

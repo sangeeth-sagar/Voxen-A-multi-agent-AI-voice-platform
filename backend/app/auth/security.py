@@ -1,29 +1,46 @@
+"""
+Authentication primitives.
+
+We use the `bcrypt` library directly (not `passlib`) to avoid the
+`passlib.handlers.bcrypt._load_backend_mixin` compatibility bug that
+appears with newer bcrypt releases.
+"""
 from datetime import datetime, timedelta
 from typing import Optional
+import bcrypt
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from app.config import get_settings
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# bcrypt has a hard 72-byte input limit. Truncate silently to avoid
+# ValueError on long passwords.
+_BCRYPT_MAX = 72
+
+
+def _truncate(plain: str) -> bytes:
+    return plain.encode("utf-8")[:_BCRYPT_MAX]
 
 
 def hash_password(password: str) -> str:
-    # bcrypt limit is 72 bytes — truncate to avoid ValueError
-    password_bytes = password.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.hash(password_bytes)
+    """Hash a plaintext password using bcrypt with a fresh salt."""
+    return bcrypt.hashpw(_truncate(password), bcrypt.gensalt()).decode("utf-8")
+
 
 def verify_password(plain: str, hashed: str) -> bool:
-    plain_bytes = plain.encode("utf-8")[:72].decode("utf-8", errors="ignore")
-    return pwd_context.verify(plain_bytes, hashed)
+    """Return True if `plain` matches the bcrypt-hashed `hashed`."""
+    try:
+        return bcrypt.checkpw(_truncate(plain), hashed.encode("utf-8"))
+    except (ValueError, TypeError):
+        return False
+
+
 def create_access_token(user_uuid: str, role: str) -> str:
     settings = get_settings()
     payload = {
         "sub": user_uuid,
         "role": role,
         "iat": datetime.utcnow(),
-        "exp": datetime.utcnow() + timedelta(
-            minutes=settings.jwt_expire_minutes
-        ),
+        "exp": datetime.utcnow() + timedelta(minutes=settings.jwt_expire_minutes),
     }
     return jwt.encode(payload, settings.jwt_secret, algorithm="HS256")
 

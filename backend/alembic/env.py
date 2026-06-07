@@ -14,6 +14,9 @@ from app.database import Base
 import app.models.user
 import app.models.agent_config
 import app.models.plan
+import app.models.user_api_key
+import app.models.agent_key_assignment
+import app.models.webhook_endpoint
 
 # Alembic Config object
 config = context.config

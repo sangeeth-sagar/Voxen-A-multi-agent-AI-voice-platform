@@ -90,7 +90,11 @@ async function handleLogin() {
       body: JSON.stringify(form.value),
     })
     auth.setAuth(data.access_token, data.user)
-    router.push('/workspace')
+    if (auth.isSuperadmin) {
+      router.push('/admin')
+    } else {
+      router.push('/')
+    }
   } catch (e) {
     error.value = e.message
   } finally {

@@ -191,3 +191,33 @@ body {
   border-image: linear-gradient(to right, #c0c1ff, #d0bcff) 1;
 }
 .tactical-input::placeholder { color: rgba(199, 196, 215, 0.5); }
+
+/* Drawer slide animation (reused by AgentBuilder + AgentDetailPanel) */
+.drawer-enter-active, .drawer-leave-active { transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1); }
+.drawer-enter-from, .drawer-leave-to { transform: translateX(100%); }
+
+/* Modal fade */
+.modal-enter-active, .modal-leave-active { transition: opacity 0.2s ease; }
+.modal-enter-from, .modal-leave-to { opacity: 0; }
+
+/* Glass panel — single canonical source */
+.glass-panel {
+  background: rgba(17, 19, 25, 0.7);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+}
+
+/* Pulsing rings for orb */
+.pulse-ring { animation: pulseRingOut 3s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+@keyframes pulseRingOut {
+  0% { transform: scale(0.8); opacity: 0.8; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+/* Toast slide */
+.toast-enter-active { transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+.toast-leave-active { transition: all 0.2s ease; }
+.toast-enter-from { transform: translateX(100%); opacity: 0; }
+.toast-leave-to { transform: translateX(100%); opacity: 0; }

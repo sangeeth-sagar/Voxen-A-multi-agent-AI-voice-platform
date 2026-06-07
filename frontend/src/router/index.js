@@ -2,14 +2,36 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 
 const routes = [
-  { path: '/', redirect: '/workspace' },
-  { path: '/login', component: () => import('@/views/LoginView.vue'), meta: { guest: true } },
-  { path: '/register', component: () => import('@/views/RegisterView.vue'), meta: { guest: true } },
-  { path: '/workspace', component: () => import('@/views/WorkspaceView.vue'), meta: { auth: true } },
-  { path: '/voice', component: () => import('@/views/VoiceView.vue'), meta: { auth: true } },
-  { path: '/agents', component: () => import('@/views/AgentsView.vue'), meta: { auth: true } },
-  { path: '/profile', component: () => import('@/views/ProfileView.vue'), meta: { auth: true } },
-  { path: '/admin', component: () => import('@/views/AdminView.vue'), meta: { auth: true, admin: true } },
+  // Public
+  { path: '/login',    name: 'Login',    component: () => import('@/views/LoginView.vue'),    meta: { guest: true } },
+  { path: '/register', name: 'Register', component: () => import('@/views/RegisterView.vue'), meta: { guest: true } },
+
+  // User app — requires auth
+  {
+    path: '/',
+    component: () => import('@/layouts/UserLayout.vue'),
+    meta: { requiresAuth: true },
+    children: [
+      { path: '',        name: 'Voice',    component: () => import('@/views/VoiceView.vue') },
+      { path: 'agents',  name: 'Agents',   component: () => import('@/views/AgentsView.vue') },
+      { path: 'profile', name: 'Profile',  component: () => import('@/views/ProfileView.vue') },
+    ]
+  },
+
+  // Admin app — requires superadmin
+  {
+    path: '/admin',
+    component: () => import('@/layouts/AdminLayout.vue'),
+    meta: { requiresAuth: true, requiresSuperadmin: true },
+    children: [
+      { path: '',        name: 'AdminDashboard', component: () => import('@/views/admin/DashboardView.vue') },
+      { path: 'users',   name: 'AdminUsers',     component: () => import('@/views/admin/UsersView.vue') },
+      { path: 'agents',  name: 'AdminAgents',    component: () => import('@/views/admin/AgentsView.vue') },
+    ]
+  },
+
+  // Fallback
+  { path: '/:pathMatch(.*)*', redirect: '/' },
 ]
 
 const router = createRouter({
@@ -17,18 +39,27 @@ const router = createRouter({
   routes,
 })
 
-router.beforeEach((to) => {
-  const auth = useAuthStore()
-  if (to.meta.auth && !auth.isLoggedIn) return '/login'
-  if (to.meta.guest && auth.isLoggedIn) return '/workspace'
-  if (to.meta.admin && !auth.isAdmin) return '/workspace'
+router.beforeEach((to, from, next) => {
+  try {
+    const auth = useAuthStore()
+    if (to.meta.requiresAuth && !auth.isLoggedIn) return next('/login')
+    if (to.meta.guest && auth.isLoggedIn) {
+      return next(auth.isSuperadmin ? '/admin' : '/')
+    }
+    if (to.meta.requiresSuperadmin && !auth.isSuperadmin) return next('/')
+    next()
+  } catch (e) {
+    console.error('Router guard error:', e)
+    try { localStorage.removeItem('user') } catch (_) {}
+    next('/login')
+  }
 })
 
-// Navigation guard to fetch fresh user data on each navigation
+// Refresh user data after each navigation
 router.afterEach(async () => {
   const auth = useAuthStore()
   if (auth.isLoggedIn) {
-    await auth.fetchFreshUser()
+    try { await auth.fetchFreshUser() } catch (_) {}
   }
 })
 

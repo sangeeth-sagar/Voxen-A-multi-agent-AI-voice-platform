@@ -74,8 +74,14 @@
           class="flex-1 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1">
           <span class="material-symbols-outlined text-[14px]">edit</span> Edit
         </button>
+        <button @click.stop="$emit('detail', agent)"
+          class="flex-1 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
+          title="Webhook & details">
+          <span class="material-symbols-outlined text-[14px]">webhook</span> Webhook
+        </button>
         <button @click.stop="$emit('delete', agent)"
-          class="flex-1 py-1.5 bg-white/5 hover:bg-error/20 hover:text-error rounded-lg transition-colors">
+          class="py-1.5 px-2 bg-white/5 hover:bg-error/20 hover:text-error rounded-lg transition-colors"
+          title="Delete">
           <span class="material-symbols-outlined text-[14px]">delete</span>
         </button>
       </div>
@@ -113,7 +119,7 @@
 import { useToastStore } from '@/stores/toast'
 
 defineProps({ agent: { type: Object, required: true } })
-defineEmits(['edit', 'clone', 'delete', 'activate', 'deactivate', 'test'])
+defineEmits(['edit', 'clone', 'delete', 'activate', 'deactivate', 'test', 'detail'])
 
 function copyWebhook() {
   navigator.clipboard.writeText(agent.webhook_url || '').then(() => {

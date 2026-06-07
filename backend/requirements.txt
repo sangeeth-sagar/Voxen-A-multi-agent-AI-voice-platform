@@ -1,16 +1,19 @@
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
+httptools==0.6.1
 sqlalchemy==2.0.30
 alembic==1.13.1
 pydantic==2.7.1
 pydantic-settings==2.2.1
 pydantic[email]==2.7.1
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+bcrypt<4.0
 python-multipart==0.0.9
 structlog==24.1.0
 langchain-google-genai==1.0.5
 google-generativeai==0.5.4
+langchain-openai==0.1.10
+langchain-anthropic==0.2.0
 python-dotenv==1.0.1
 psycopg2-binary==2.9.9
 redis==5.0.4
@@ -27,3 +30,4 @@ langchain-community==0.2.0
 langgraph==0.1.1
 pypdf2==3.0.1
 sentence-transformers==2.7.0
+cryptography==42.0.5

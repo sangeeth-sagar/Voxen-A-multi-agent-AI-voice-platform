@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from pydantic import BaseModel as PydanticBaseModel
 from sqlalchemy.orm import Session
 from typing import List, Optional
 import uuid
@@ -7,12 +8,37 @@ from app.auth.dependencies import get_current_user
 from app.database import get_db
 from app.models.user import User
 from app.models.agent_config import AgentConfig
+from app.models.agent_key_assignment import AgentApiKeyAssignment
+from app.models.user_api_key import UserApiKey
 from app.schemas.agent_config import (
     AgentConfigCreate, AgentConfigUpdate, AgentConfigResponse
 )
 from app.config import get_settings
 
 router = APIRouter()
+
+
+# ---------------------------------------------------------------------------
+# Helper: attach key-assignment info to an agent response dict
+# ---------------------------------------------------------------------------
+def _attach_key_info(db: Session, agent: AgentConfig, agent_dict: dict) -> dict:
+    """Augment an agent response dict with key-assignment fields.
+
+    Always safe to call — returns sensible defaults if no assignment exists.
+    """
+    assignment = (
+        db.query(AgentApiKeyAssignment)
+        .filter(AgentApiKeyAssignment.agent_id == agent.id)
+        .first()
+    )
+    agent_dict["has_key_assignment"] = assignment is not None
+    agent_dict["llm_provider"] = assignment.llm_provider if assignment else None
+    agent_dict["tts_provider"] = assignment.tts_provider if assignment else None
+    agent_dict["stt_provider"] = assignment.stt_provider if assignment else None
+    agent_dict["llm_key_id"] = assignment.llm_api_key_id if assignment else None
+    agent_dict["tts_key_id"] = assignment.tts_api_key_id if assignment else None
+    agent_dict["stt_key_id"] = assignment.stt_api_key_id if assignment else None
+    return agent_dict
 
 
 @router.get("", response_model=List[AgentConfigResponse])
@@ -34,7 +60,7 @@ def list_agents(
             )
             .all()
         )
-    # Convert to response model, including owner_username
+    # Convert to response model, including owner_username and key info
     result = []
     for agent in agents:
         owner_username = None
@@ -42,6 +68,7 @@ def list_agents(
             owner_username = agent.user.username
         agent_dict = AgentConfigResponse.model_validate(agent).model_dump()
         agent_dict["owner_username"] = owner_username
+        _attach_key_info(db, agent, agent_dict)
         result.append(AgentConfigResponse(**agent_dict))
     return result
 
@@ -78,9 +105,26 @@ def create_agent(
     db.add(agent)
     db.commit()
     db.refresh(agent)
-    # Return response with owner_username
+
+    # Save key assignment immediately after agent creation (if any key was provided)
+    if agent_in.llm_key_id or agent_in.tts_key_id or agent_in.stt_key_id:
+        assignment = AgentApiKeyAssignment(
+            agent_id=agent.id,
+            llm_provider=agent_in.llm_provider or "gemini",
+            llm_api_key_id=agent_in.llm_key_id,
+            tts_provider=agent_in.tts_provider or "browser",
+            tts_api_key_id=agent_in.tts_key_id,
+            stt_provider=agent_in.stt_provider or "groq",
+            stt_api_key_id=agent_in.stt_key_id,
+        )
+        db.add(assignment)
+        db.commit()
+        db.refresh(assignment)
+
+    # Return response with owner_username + key info
     agent_dict = AgentConfigResponse.model_validate(agent).model_dump()
     agent_dict["owner_username"] = current_user.username
+    _attach_key_info(db, agent, agent_dict)
     return AgentConfigResponse(**agent_dict)
 
 
@@ -106,12 +150,13 @@ def get_agent(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Access denied",
         )
-    # Return response with owner_username
+    # Return response with owner_username + key info
     owner_username = None
     if agent.user:
         owner_username = agent.user.username
     agent_dict = AgentConfigResponse.model_validate(agent).model_dump()
     agent_dict["owner_username"] = owner_username
+    _attach_key_info(db, agent, agent_dict)
     return AgentConfigResponse(**agent_dict)
 
 
@@ -134,18 +179,64 @@ def update_agent(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Not authorized to update this agent",
         )
-    # Update fields if provided
+
+    # Split model fields (AgentConfig columns) from key-assignment fields
+    key_assignment_fields = {
+        "llm_provider", "llm_key_id",
+        "tts_provider", "tts_key_id",
+        "stt_provider", "stt_key_id",
+    }
     update_data = agent_in.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
+    agent_fields = {k: v for k, v in update_data.items() if k not in key_assignment_fields}
+    key_fields = {k: v for k, v in update_data.items() if k in key_assignment_fields}
+
+    # Update agent fields
+    for field, value in agent_fields.items():
         setattr(agent, field, value)
     db.commit()
     db.refresh(agent)
-    # Return response with owner_username
+
+    # Update or create key assignment
+    if key_fields:
+        existing_assignment = (
+            db.query(AgentApiKeyAssignment)
+            .filter(AgentApiKeyAssignment.agent_id == agent.id)
+            .first()
+        )
+
+        if existing_assignment:
+            if "llm_provider" in key_fields and key_fields["llm_provider"] is not None:
+                existing_assignment.llm_provider = key_fields["llm_provider"]
+            if "llm_key_id" in key_fields and key_fields["llm_key_id"] is not None:
+                existing_assignment.llm_api_key_id = key_fields["llm_key_id"]
+            if "tts_provider" in key_fields and key_fields["tts_provider"] is not None:
+                existing_assignment.tts_provider = key_fields["tts_provider"]
+            if "tts_key_id" in key_fields and key_fields["tts_key_id"] is not None:
+                existing_assignment.tts_api_key_id = key_fields["tts_key_id"]
+            if "stt_provider" in key_fields and key_fields["stt_provider"] is not None:
+                existing_assignment.stt_provider = key_fields["stt_provider"]
+            if "stt_key_id" in key_fields and key_fields["stt_key_id"] is not None:
+                existing_assignment.stt_api_key_id = key_fields["stt_key_id"]
+        else:
+            new_assignment = AgentApiKeyAssignment(
+                agent_id=agent.id,
+                llm_provider=key_fields.get("llm_provider") or "gemini",
+                llm_api_key_id=key_fields.get("llm_key_id"),
+                tts_provider=key_fields.get("tts_provider") or "browser",
+                tts_api_key_id=key_fields.get("tts_key_id"),
+                stt_provider=key_fields.get("stt_provider") or "groq",
+                stt_api_key_id=key_fields.get("stt_key_id"),
+            )
+            db.add(new_assignment)
+        db.commit()
+
+    # Return response with owner_username + key info
     owner_username = None
     if agent.user:
         owner_username = agent.user.username
     agent_dict = AgentConfigResponse.model_validate(agent).model_dump()
     agent_dict["owner_username"] = owner_username
+    _attach_key_info(db, agent, agent_dict)
     return AgentConfigResponse(**agent_dict)
 
 
@@ -225,12 +316,13 @@ def clone_agent(
     source_agent.use_count += 1
     db.commit()
     db.refresh(cloned_agent)
-    # Return response with owner_username
+    # Return response with owner_username + key info
     owner_username = None
     if cloned_agent.user:
         owner_username = cloned_agent.user.username
     agent_dict = AgentConfigResponse.model_validate(cloned_agent).model_dump()
     agent_dict["owner_username"] = owner_username
+    _attach_key_info(db, cloned_agent, agent_dict)
     return AgentConfigResponse(**agent_dict)
 
 
@@ -278,12 +370,13 @@ def activate_agent(
     logger = structlog.get_logger()
     logger.info("agent_activated", agent_uuid=agent.uuid, webhook_id=webhook_id)
     
-    # Return response with owner_username
+    # Return response with owner_username + key info
     owner_username = None
     if agent.user:
         owner_username = agent.user.username
     agent_dict = AgentConfigResponse.model_validate(agent).model_dump()
     agent_dict["owner_username"] = owner_username
+    _attach_key_info(db, agent, agent_dict)
     return AgentConfigResponse(**agent_dict)
 
 
@@ -323,13 +416,84 @@ def deactivate_agent(
     logger = structlog.get_logger()
     logger.info("agent_deactivated", agent_uuid=agent.uuid)
     
-    # Return response with owner_username
+    # Return response with owner_username + key info
     owner_username = None
     if agent.user:
         owner_username = agent.user.username
     agent_dict = AgentConfigResponse.model_validate(agent).model_dump()
     agent_dict["owner_username"] = owner_username
+    _attach_key_info(db, agent, agent_dict)
     return AgentConfigResponse(**agent_dict)
+
+
+# ---------------------------------------------------------------------------
+# Test endpoint — direct LLM call using the agent's assigned key
+# ---------------------------------------------------------------------------
+class AgentTestRequest(PydanticBaseModel):
+    text: str
+    language: str = "en"
+
+
+@router.post("/{agent_uuid}/test")
+async def test_agent(
+    agent_uuid: str,
+    body: AgentTestRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Send a single text prompt to the agent's LLM and return the reply.
+
+    Reads the key assignment, decrypts the stored LLM key, invokes the
+    configured provider, and returns the raw text response. Used by the
+    frontend "Test Agent" panel in AgentBuilder.
+    """
+    from app.utils.encryption import decrypt_key
+    from app.llm_router import get_llm, build_system_prompt
+
+    agent = db.query(AgentConfig).filter(
+        AgentConfig.uuid == agent_uuid,
+        AgentConfig.user_id == current_user.id
+    ).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+
+    assignment = db.query(AgentApiKeyAssignment).filter(
+        AgentApiKeyAssignment.agent_id == agent.id
+    ).first()
+    if not assignment or not assignment.llm_api_key_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No API key attached to this agent. Edit it and attach your Gemini key.",
+        )
+
+    llm_key_row = db.query(UserApiKey).filter(
+        UserApiKey.id == assignment.llm_api_key_id
+    ).first()
+    if not llm_key_row:
+        raise HTTPException(status_code=400, detail="API key record not found")
+
+    llm_key = decrypt_key(llm_key_row.api_key)
+
+    try:
+        llm = get_llm(assignment.llm_provider or "gemini", llm_key)
+        system_prompt = build_system_prompt(agent, body.language)
+        messages = [("system", system_prompt), ("human", body.text)]
+        result = await llm.ainvoke(messages)
+
+        raw = result.content
+        if isinstance(raw, list):
+            response_text = "".join(
+                p.get("text", "") if isinstance(p, dict) else str(p)
+                for p in raw
+            )
+        else:
+            response_text = raw if isinstance(raw, str) else str(raw)
+
+        return {"response": response_text, "provider": assignment.llm_provider}
+    except Exception as e:
+        logger = structlog.get_logger()
+        logger.error("agent_test_failed", agent_uuid=agent.uuid, error=str(e))
+        raise HTTPException(status_code=500, detail=f"Test failed: {str(e)}")
 
 
 @router.post("/{agent_uuid}/kb/upload")

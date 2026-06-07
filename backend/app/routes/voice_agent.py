@@ -71,9 +71,11 @@ async def voice_agent_chat(
             agent.kb_collection_name, text
         )
     
-    # 5. Call run_agent_turn
+    # 5. Call run_agent_turn (resolves the per-user API key inside)
     try:
         response_text = await run_agent_turn(
+            db=db,
+            agent=agent,
             user_text=text,
             system_prompt=agent.voice_system_prompt or agent.system_prompt,
             session_messages=session_messages,
@@ -81,6 +83,8 @@ async def voice_agent_chat(
             agent_name=agent.wake_word,
             language=language,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("llm_agent_failed", agent_uuid=agent_uuid, error=str(e))
         raise HTTPException(status_code=500, detail=f"Agent processing failed: {str(e)}")

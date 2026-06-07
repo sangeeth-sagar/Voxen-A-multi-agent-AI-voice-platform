@@ -78,9 +78,11 @@ async def handle_webhook(
             agent.kb_collection_name, transcribed_text
         )
 
-    # 7. Run LLM
+    # 7. Run LLM (resolves the agent's per-user API key inside run_agent_turn)
     try:
         response_text = await run_agent_turn(
+            db=db,
+            agent=agent,
             user_text=transcribed_text,
             system_prompt=agent.voice_system_prompt or agent.system_prompt,
             session_messages=session_messages,
@@ -88,6 +90,8 @@ async def handle_webhook(
             agent_name=agent.wake_word,
             language=language,
         )
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error("llm_agent_failed", webhook_id=webhook_id, error=str(e), language=language)
         raise HTTPException(status_code=500, detail=f"Agent processing failed: {str(e)}")
