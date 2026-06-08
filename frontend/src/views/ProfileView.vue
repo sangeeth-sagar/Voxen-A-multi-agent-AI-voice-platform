@@ -128,6 +128,9 @@
                 <span class="key-label">{{ key.label }}</span>
                 <span class="key-preview font-mono">{{ key.key_preview || '••••••••' }}</span>
               </div>
+              <span class="key-usage-hint">
+                Used by {{ agentCountForKey(key.id) }} agent(s)
+              </span>
               <button @click="deleteKey(key.id)" class="btn-danger-sm" title="Delete key">
                 <span class="material-symbols-outlined">delete</span>
               </button>
@@ -212,6 +215,13 @@ const newKey = ref({ provider: 'gemini', label: '', api_key: '' })
 const adding = ref(false)
 const keyError = ref('')
 const loadingKeys = ref(false)
+const agents = ref([])
+
+function agentCountForKey(keyId) {
+  return agents.value.filter(
+    a => a.llm_key_id === keyId || a.tts_key_id === keyId
+  ).length
+}
 
 async function addKey() {
   keyError.value = ''
@@ -253,6 +263,12 @@ onMounted(async () => {
   loadingKeys.value = true
   await fetchKeys()
   loadingKeys.value = false
+  try {
+    const data = await apiFetch('/api/v1/agents')
+    agents.value = Array.isArray(data) ? data : (data?.agents || data?.items || [])
+  } catch {
+    agents.value = []
+  }
 })
 </script>
 
@@ -347,10 +363,25 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 12px;
   padding: 12px 14px;
   background: rgba(255, 255, 255, 0.03);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
+}
+
+.key-usage-hint {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #908fa0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  padding: 4px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .key-info {

@@ -56,6 +56,14 @@ class Settings(BaseSettings):
     # Superadmin bootstrap
     admin_email: str = "admin@voxen.ai"
 
+    # Analytics tracking (future use)
+    track_token_usage: bool = True
+    track_response_time: bool = True
+
+    # Rate limiting
+    rate_limit_per_minute: int = 60
+    rate_limit_per_hour: int = 500
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

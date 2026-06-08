@@ -22,6 +22,8 @@ import structlog
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
+from langchain_groq import ChatGroq
+from groq import Groq
 
 from app.config import settings
 from app.utils.llm_utils import extract_text_from_content
@@ -87,6 +89,13 @@ def get_llm(provider: str, api_key: str):
             anthropic_api_key=api_key,
             max_retries=2,
             timeout=10,
+        )
+    if provider == "groq":
+        return ChatGroq(
+            model="llama-3.1-8b-instant",   # fast and free tier available
+            groq_api_key=api_key,
+            max_retries=2,
+            timeout=15,
         )
     raise ValueError(f"Unsupported LLM provider: {provider}")
 

@@ -56,10 +56,12 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
 import { apiFetch } from '@/composables/useApi'
 
 const router = useRouter()
 const auth = useAuthStore()
+const toast = useToastStore()
 const form = ref({ username: '', email: '', password: '' })
 const loading = ref(false)
 const error = ref('')
@@ -73,11 +75,16 @@ async function handleRegister() {
       body: JSON.stringify(form.value),
     })
     auth.setAuth(data.access_token, data.user)
-    if (auth.isSuperadmin) {
-      router.push('/admin')
-    } else {
-      router.push('/')
+
+    if (data.needs_api_key) {
+      toast.show(
+        '👋 Welcome! Add your Gemini API key in Profile → API Keys to activate your voice agent.',
+        'info',
+        8000
+      )
     }
+
+    router.push(data.user?.is_superadmin ? '/admin' : '/')
   } catch (e) {
     error.value = e.message
   } finally {

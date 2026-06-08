@@ -16,28 +16,23 @@ function getVoices() {
 async function speak(text, languageCode = null) {
   if (!text) return
 
-  // Stop anything currently playing
   speechSynthesis.cancel()
 
   const LOCALE_MAP = { en: 'en-GB', hi: 'hi-IN', mr: 'mr-IN', ml: 'ml-IN' }
   const locale = languageCode ? LOCALE_MAP[languageCode] : getTtsLocale()
 
-  const utterance = new SpeechSynthesisUtterance(text)
-  utterance.rate = 0.92
-  utterance.pitch = 1.0
-  utterance.volume = 1.0
+  const MAX_CHARS = 200
+  const chunks = text.length > MAX_CHARS ? splitTextIntoChunks(text, MAX_CHARS) : [text]
 
-  // Fallback voice chain — if exact locale missing, try these in order
   const VOICE_FALLBACK_CHAIN = {
-    'mr-IN': ['mr-IN', 'hi-IN', 'en-IN', 'en-US'],  // Marathi → Hindi → Indian English → English
-    'ml-IN': ['ml-IN', 'hi-IN', 'en-IN', 'en-US'],  // Malayalam → Hindi → Indian English → English
+    'en-GB': ['en-GB', 'en-US', 'en-AU', 'en-IN', 'en'],
+    'en-US': ['en-US', 'en-GB', 'en-AU', 'en'],
     'hi-IN': ['hi-IN', 'en-IN', 'en-US'],
-    'en-US': ['en-US', 'en-GB', 'en'],
+    'mr-IN': ['mr-IN', 'hi-IN', 'en-IN', 'en-US'],
+    'ml-IN': ['ml-IN', 'hi-IN', 'en-IN', 'en-US'],
   }
 
   const voices = await getVoices()
-
-  // Try each fallback locale in order until a voice is found
   const fallbackChain = VOICE_FALLBACK_CHAIN[locale] || [locale, 'en-US']
   let selectedVoice = null
 
@@ -48,21 +43,53 @@ async function speak(text, languageCode = null) {
     if (selectedVoice) break
   }
 
-  if (selectedVoice) {
-    utterance.voice = selectedVoice
-    utterance.lang = selectedVoice.lang
-  } else {
-    // Last resort — just set lang and let browser decide
-    utterance.lang = locale
+  for (const chunk of chunks) {
+    await new Promise((resolve) => {
+      const utterance = new SpeechSynthesisUtterance(chunk)
+      utterance.rate = 0.92
+      utterance.pitch = 1.0
+      utterance.volume = 1.0
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice
+        utterance.lang = selectedVoice.lang
+      } else {
+        utterance.lang = locale
+      }
+
+      const resumeTimer = setInterval(() => {
+        if (speechSynthesis.paused) speechSynthesis.resume()
+      }, 500)
+
+      utterance.onend = () => { clearInterval(resumeTimer); resolve() }
+      utterance.onerror = (e) => {
+        clearInterval(resumeTimer)
+        console.warn('[useTTS] error:', e.error)
+        resolve()
+      }
+
+      currentUtterance = utterance
+      speechSynthesis.speak(utterance)
+    })
   }
+}
 
-  currentUtterance = utterance
-  speechSynthesis.speak(utterance)
-
-  return new Promise((resolve) => {
-    utterance.onend = resolve
-    utterance.onerror = resolve  // resolve even on error so app doesn't hang
-  })
+function splitTextIntoChunks(text, maxChars) {
+  if (text.length <= maxChars) return [text]
+  const chunks = []
+  let remaining = text
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChars) { chunks.push(remaining); break }
+    const slice = remaining.slice(0, maxChars)
+    const lastBreak = Math.max(
+      slice.lastIndexOf('. '), slice.lastIndexOf('? '),
+      slice.lastIndexOf('! '), slice.lastIndexOf('। '), slice.lastIndexOf('\n')
+    )
+    const cutAt = lastBreak > 30 ? lastBreak + 1 : maxChars
+    chunks.push(remaining.slice(0, cutAt).trim())
+    remaining = remaining.slice(cutAt).trim()
+  }
+  return chunks.filter(c => c.length > 0)
 }
 
 function stop() {

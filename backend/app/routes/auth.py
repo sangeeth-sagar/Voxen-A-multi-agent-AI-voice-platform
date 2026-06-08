@@ -1,7 +1,9 @@
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from app.auth.security import hash_password, verify_password, create_access_token
 from app.auth.dependencies import get_current_user, get_optional_user, require_admin
 from app.config import get_settings
@@ -16,9 +18,12 @@ from app.schemas.user import (
 
 router = APIRouter()
 
+limiter = Limiter(key_func=get_remote_address)
+
 
 @router.post("/register", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
-def register(user_in: UserRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+def register(request: Request, user_in: UserRegister, db: Session = Depends(get_db)):
     # Check email uniqueness
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(
@@ -55,7 +60,7 @@ characters in your responses — only plain spoken language."""
         description="Your personal AI voice assistant. Ask anything!",
         agent_type="voice",
         is_voice_agent=True,
-        voice_language="en-US",
+        voice_language="en",    # use 2-letter code matching the language system
         voice_system_prompt=DEFAULT_VOICE_PROMPT,
         tools_enabled=[],
         output_format="text",
@@ -85,11 +90,13 @@ characters in your responses — only plain spoken language."""
     return TokenResponse(
         access_token=access_token,
         user=UserResponse.model_validate(user),
+        needs_api_key=True,    # signal frontend to show key setup prompt
     )
 
 
 @router.post("/login", response_model=TokenResponse)
-def login(user_in: UserLogin, db: Session = Depends(get_db)):
+@limiter.limit("10/minute")
+def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
     # Find user by email
     user = db.query(User).filter(User.email == user_in.email).first()
     if not user or not verify_password(user_in.password, user.hashed_password):

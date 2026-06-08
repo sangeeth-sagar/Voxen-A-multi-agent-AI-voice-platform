@@ -158,10 +158,17 @@ function onDetailUpdated(updated) {
   detailAgent.value = agents.value[idx] || updated
 }
 
-function onSaved(agent) {
-  const idx = agents.value.findIndex(a => a.uuid === agent.uuid)
-  if (idx > -1) agents.value[idx] = agent
-  else agents.value.unshift(agent)
+async function onSaved(updatedAgent) {
+  builderOpen.value = false
+  editingAgent.value = null
+  await fetchAgents()
+
+  const activeUuid = localStorage.getItem('active_agent')
+  if (updatedAgent?.uuid === activeUuid) {
+    localStorage.setItem('agent_updated', Date.now().toString())
+  }
+
+  toast.show('Agent saved successfully', 'success')
 }
 
 async function cloneAgent(agent) {

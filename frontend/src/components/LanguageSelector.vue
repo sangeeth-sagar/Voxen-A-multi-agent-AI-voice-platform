@@ -18,21 +18,42 @@
         <span
           v-if="voiceStatus[lang.code] === 'fallback'"
           class="voice-badge fallback"
-          title="Native voice not available — using fallback voice"
-        >
-          ↩ fallback
-        </span>
+          title="TTS uses fallback voice"
+        >↩ TTS</span>
+        <span
+          v-if="sttStatus[lang.code] === 'unsupported'"
+          class="voice-badge unsupported"
+          title="Speech recognition may not work on this device"
+        >⚠️ STT</span>
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
+import { ref, onMounted } from 'vue'
 import { useLanguage } from '@/composables/useLanguage'
 
 const emit = defineEmits(['change'])
 
 const { LANGUAGES, selectedLanguage, setLanguage, voiceStatus } = useLanguage()
+
+const sttStatus = ref({})
+
+onMounted(async () => {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) {
+    sttStatus.value = { en: 'unsupported', hi: 'unsupported', mr: 'unsupported', ml: 'unsupported' }
+    return
+  }
+  const KNOWN_UNSUPPORTED_WINDOWS = ['mr-IN', 'ml-IN']
+  const localeMap = { en: 'en-GB', hi: 'hi-IN', mr: 'mr-IN', ml: 'ml-IN' }
+  const next = {}
+  for (const [code, locale] of Object.entries(localeMap)) {
+    next[code] = KNOWN_UNSUPPORTED_WINDOWS.includes(locale) ? 'unsupported' : 'supported'
+  }
+  sttStatus.value = next
+})
 
 function handleSelect(code) {
   setLanguage(code)
@@ -109,5 +130,10 @@ function handleSelect(code) {
   background: rgba(251, 191, 36, 0.15);
   color: #fbbf24;
   border: 1px solid rgba(251, 191, 36, 0.3);
+}
+.voice-badge.unsupported {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fca5a5;
+  border: 1px solid rgba(239, 68, 68, 0.3);
 }
 </style>

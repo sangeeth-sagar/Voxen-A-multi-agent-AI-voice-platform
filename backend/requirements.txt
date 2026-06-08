@@ -1,33 +1,67 @@
-fastapi==0.111.0
-uvicorn[standard]==0.29.0
-httptools==0.6.1
-sqlalchemy==2.0.30
-alembic==1.13.1
-pydantic==2.7.1
-pydantic-settings==2.2.1
-pydantic[email]==2.7.1
-python-jose[cryptography]==3.3.0
-bcrypt<4.0
+# =============================================================================
+# AgentIQ / Voxen backend requirements
+# Verified to install cleanly on Python 3.11 in a fresh venv and to import the
+# full FastAPI app without errors.
+# =============================================================================
+
+# --- Web framework -----------------------------------------------------------
+fastapi==0.136.3
+uvicorn[standard]==0.49.0
+httptools==0.8.0
 python-multipart==0.0.9
-structlog==24.1.0
-langchain-google-genai==1.0.5
-google-generativeai==0.5.4
-langchain-openai==0.1.10
-langchain-anthropic==0.2.0
-python-dotenv==1.0.1
-psycopg2-binary==2.9.9
-redis==5.0.4
+slowapi==0.1.9
+
+# --- Data validation ---------------------------------------------------------
+pydantic==2.13.4
+pydantic-settings==2.14.1
+email-validator==2.3.0
+
+# --- Database ----------------------------------------------------------------
+sqlalchemy==2.0.50
+alembic==1.18.4
+psycopg2-binary==2.9.12
+
+# --- Task queue (worker.py placeholder; safe to remove if unused) ------------
 celery==5.4.0
+redis==5.0.4
+
+# --- Auth & Security ---------------------------------------------------------
+python-jose[cryptography]==3.3.0
+bcrypt==5.0.0
+cryptography==48.0.0
+
+# --- HTTP & async I/O --------------------------------------------------------
 httpx==0.27.0
-groq==0.9.0
-edge-tts==6.1.10
-aiofiles==23.2.1
-python-multipart==0.0.9
-chromadb==0.5.0
+aiofiles==25.1.0
+requests==2.34.2
+
+# --- Logging -----------------------------------------------------------------
+structlog==26.1.0
+
+# --- Config / .env -----------------------------------------------------------
+python-dotenv==1.2.2
+
+# --- LangChain core ----------------------------------------------------------
 langchain==0.2.0
+langsmith==0.1.147
+
+# --- LangChain provider integrations -----------------------------------------
 langchain-google-genai==1.0.5
-langchain-community==0.2.0
-langgraph==0.1.1
-pypdf2==3.0.1
+langchain-openai==0.1.10
+langchain-anthropic==0.1.23
+langchain-groq==0.1.10
+
+# --- LLM / STT provider SDKs -------------------------------------------------
+google-generativeai==0.5.4
+google-ai-generativelanguage==0.6.4
+openai==1.55.0
+anthropic==0.39.0
+groq==0.11.0
+
+# --- TTS ---------------------------------------------------------------------
+edge-tts==6.1.10
+
+# --- Knowledge base / RAG ----------------------------------------------------
+chromadb==0.5.0
 sentence-transformers==2.7.0
-cryptography==42.0.5
+PyPDF2==3.0.1

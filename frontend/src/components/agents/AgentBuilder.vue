@@ -67,6 +67,7 @@
                   <option value="gemini">Google Gemini</option>
                   <option value="openai">OpenAI</option>
                   <option value="claude">Anthropic Claude</option>
+                  <option value="groq">Groq (LLaMA)</option>
                 </select>
               </div>
 
@@ -222,7 +223,7 @@ const isEdit = ref(false)
 
 const { apiKeys, fetchKeys } = useApiKeys()
 
-const LLM_PROVIDERS = ['gemini', 'openai', 'claude']
+const LLM_PROVIDERS = ['gemini', 'openai', 'claude', 'groq']
 const TTS_PROVIDERS = ['elevenlabs', 'groq', 'azure_tts', 'deepgram']
 
 const llmKeys = computed(() =>

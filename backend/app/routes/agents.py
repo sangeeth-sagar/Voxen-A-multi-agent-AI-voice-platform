@@ -361,14 +361,28 @@ def activate_agent(
     agent.is_active = True
     agent.webhook_id = webhook_id
     agent.webhook_url = webhook_url
-    
+
     db.commit()
     db.refresh(agent)
-    
+
     # Log activation
     import structlog
     logger = structlog.get_logger()
     logger.info("agent_activated", agent_uuid=agent.uuid, webhook_id=webhook_id)
+
+    # Check for key assignment and warn if missing
+    assignment = (
+        db.query(AgentApiKeyAssignment)
+        .filter(AgentApiKeyAssignment.agent_id == agent.id)
+        .first()
+    )
+
+    if not assignment or not assignment.llm_api_key_id:
+        logger.warning(
+            "agent_activated_without_key",
+            agent_uuid=agent.uuid,
+            message="Agent activated but has no LLM key — voice will fail",
+        )
     
     # Return response with owner_username + key info
     owner_username = None

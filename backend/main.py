@@ -1,5 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 from app.routes import auth, admin, agents, plan, voice, webhook, voice_agent
 from app.routes.api_keys import router as keys_router
 from app.routes.ws_voice import router as ws_router
@@ -11,6 +14,10 @@ app = FastAPI(
     version=get_settings().app_version,
     description="Voice Agent Backend with Authentication and Admin Panel",
 )
+
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # CORS middleware
 app.add_middleware(

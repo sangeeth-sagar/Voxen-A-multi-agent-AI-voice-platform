@@ -49,6 +49,22 @@
       </div>
     </transition>
 
+    <!-- Setup banner for missing API key (code 4005) -->
+    <transition name="fade">
+      <div v-if="showKeySetupBanner" class="setup-banner relative z-30 mx-8 mb-3">
+        <span class="material-symbols-outlined">key_off</span>
+        <div class="setup-banner-text">
+          <strong>No API key attached to this agent.</strong>
+          <span> Go to Agents → Edit Agent → select your Gemini key, then save.</span>
+        </div>
+        <div class="setup-banner-actions">
+          <RouterLink to="/agents" class="setup-btn">Fix in Agents →</RouterLink>
+          <RouterLink to="/profile" class="setup-btn-secondary">Add Key in Profile</RouterLink>
+        </div>
+        <button @click="showKeySetupBanner = false" class="error-dismiss" title="Dismiss">✕</button>
+      </div>
+    </transition>
+
     <!-- Center orb -->
     <main class="flex-1 flex flex-col items-center justify-center relative z-10">
       <div class="absolute w-[600px] h-[600px] rounded-full border border-primary/5 animate-[pulse_8s_ease-in-out_infinite]" />
@@ -151,7 +167,7 @@ import { useLanguage } from '@/composables/useLanguage'
 import { useToastStore } from '@/stores/toast'
 import LanguageSelector from '@/components/LanguageSelector.vue'
 
-const { selectedLanguage, getSttLocale } = useLanguage()
+const { selectedLanguage, getSttLocale, getCurrentLanguage, detectVoiceStatus } = useLanguage()
 const toast = useToastStore()
 
 // ── Refs ──────────────────────────────────────────────
@@ -160,6 +176,7 @@ const userAgents = ref([])
 const wsStatus = ref('disconnected')
 const isStreaming = ref(false)
 const agentError = ref('')
+const showKeySetupBanner = ref(false)
 const isThinking = ref(false)
 const intentionalClose = ref(false)
 
@@ -180,6 +197,8 @@ let isPlayingAudio = false           // plain bool — NOT ref
 const audioChunkBuffer = {}          // indexed chunk buffer
 
 let currentAudio = null
+let currentAudioUrl = null
+let resolveCurrentAudio = null
 let recognition = null
 let reconnectTimer = null
 const pingInterval = ref(null)
@@ -234,16 +253,30 @@ function connectWebSocket() {
     }, 30000)
   }
 
-  socket.onclose = () => {
+  socket.onclose = (event) => {
     wsStatus.value = 'disconnected'
     clearInterval(pingInterval.value)
     pingInterval.value = null
+
+    if (event.code === 4005) {
+      agentError.value = 'No API key attached to this agent.'
+      wsStatus.value = 'failed'
+      showKeySetupBanner.value = true
+      return
+    }
+
+    if (event.code === 4004) {
+      agentError.value = 'Agent not found.'
+      wsStatus.value = 'failed'
+      return
+    }
+
     if (!intentionalClose.value && reconnectAttempts.value < MAX_RECONNECT) {
       reconnectAttempts.value++
       reconnectTimer = setTimeout(connectWebSocket, 3000)
     } else if (reconnectAttempts.value >= MAX_RECONNECT) {
       wsStatus.value = 'failed'
-      agentError.value = 'Cannot connect to agent. Make sure API keys are attached in Agents → Edit Agent.'
+      agentError.value = 'Cannot connect. Check that API keys are attached in Agents → Edit Agent.'
     }
   }
 
@@ -341,7 +374,18 @@ function connectWebSocket() {
         Object.keys(audioChunkBuffer).forEach(k => delete audioChunkBuffer[k])
         isPlayingAudio = false
         window.speechSynthesis?.cancel()
-        if (currentAudio) { try { currentAudio.pause() } catch (_) {} currentAudio = null }
+        if (currentAudio) {
+          try { currentAudio.pause() } catch (_) {}
+          currentAudio = null
+        }
+        if (currentAudioUrl) {
+          try { URL.revokeObjectURL(currentAudioUrl) } catch (_) {}
+          currentAudioUrl = null
+        }
+        if (resolveCurrentAudio) {
+          resolveCurrentAudio()
+          resolveCurrentAudio = null
+        }
         isSpeaking.value = false
         break
 
@@ -364,6 +408,7 @@ function connectWebSocket() {
 function reconnectWebSocket() {
   intentionalClose.value = true
   reconnectAttempts.value = 0
+  showKeySetupBanner.value = false
   clearInterval(pingInterval.value)
   pingInterval.value = null
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
@@ -377,7 +422,18 @@ function reconnectWebSocket() {
   Object.keys(audioChunkBuffer).forEach(k => delete audioChunkBuffer[k])
   isPlayingAudio = false
   isSpeaking.value = false
-  if (currentAudio) { try { currentAudio.pause() } catch (_) {} currentAudio = null }
+  if (currentAudio) {
+    try { currentAudio.pause() } catch (_) {}
+    currentAudio = null
+  }
+  if (currentAudioUrl) {
+    try { URL.revokeObjectURL(currentAudioUrl) } catch (_) {}
+    currentAudioUrl = null
+  }
+  if (resolveCurrentAudio) {
+    resolveCurrentAudio()
+    resolveCurrentAudio = null
+  }
   if (activeAgentUuid.value && activeAgentUuid.value !== 'default') {
     localStorage.setItem('active_agent', activeAgentUuid.value)
   }
@@ -387,70 +443,161 @@ function reconnectWebSocket() {
   }, 500)
 }
 
-function fallbackBrowserTTS(text) {
+async function fallbackBrowserTTS(text) {
   if (!text || !window.speechSynthesis) return
+
+  const MAX_CHARS = 200
+  const chunks = splitIntoChunks(text, MAX_CHARS)
+
   window.speechSynthesis.cancel()
-  const u = new SpeechSynthesisUtterance(text)
-  u.lang = { en: 'en-GB', hi: 'hi-IN', mr: 'mr-IN', ml: 'ml-IN' }[selectedLanguage.value] || 'en-GB'
-  u.rate = 0.92
-  u.pitch = 1.0
-  window.speechSynthesis.speak(u)
+
+  const LOCALE_MAP = { en: 'en-GB', hi: 'hi-IN', mr: 'mr-IN', ml: 'ml-IN' }
+  const locale = LOCALE_MAP[selectedLanguage.value] || 'en-GB'
+
+  const FALLBACK_CHAIN = {
+    'en-GB': ['en-GB', 'en-US', 'en-IN', 'en'],
+    'hi-IN': ['hi-IN', 'en-IN', 'en-US'],
+    'mr-IN': ['mr-IN', 'hi-IN', 'en-IN', 'en-US'],
+    'ml-IN': ['ml-IN', 'hi-IN', 'en-IN', 'en-US'],
+  }
+
+  let voices = window.speechSynthesis.getVoices()
+  if (!voices.length) {
+    await new Promise(resolve => {
+      window.speechSynthesis.onvoiceschanged = () => {
+        voices = window.speechSynthesis.getVoices()
+        resolve()
+      }
+      setTimeout(resolve, 1000)
+    })
+  }
+
+  const chain = FALLBACK_CHAIN[locale] || [locale, 'en-US']
+  let selectedVoice = null
+  for (const fallbackLocale of chain) {
+    selectedVoice =
+      voices.find(v => v.lang === fallbackLocale) ||
+      voices.find(v => v.lang.startsWith(fallbackLocale.split('-')[0]))
+    if (selectedVoice) break
+  }
+
+  isSpeaking.value = true
+
+  for (let i = 0; i < chunks.length; i++) {
+    await new Promise((resolve) => {
+      const u = new SpeechSynthesisUtterance(chunks[i])
+      u.lang = selectedVoice ? selectedVoice.lang : locale
+      if (selectedVoice) u.voice = selectedVoice
+      u.rate = 0.92
+      u.pitch = 1.0
+      u.volume = 1.0
+
+      const resumeTimer = setInterval(() => {
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume()
+        }
+      }, 500)
+
+      u.onend = () => { clearInterval(resumeTimer); resolve() }
+      u.onerror = (e) => { clearInterval(resumeTimer); console.warn('[TTS] error:', e.error); resolve() }
+
+      window.speechSynthesis.speak(u)
+    })
+  }
+
+  isSpeaking.value = false
+}
+
+function splitIntoChunks(text, maxChars) {
+  if (text.length <= maxChars) return [text]
+  const chunks = []
+  let remaining = text
+  while (remaining.length > 0) {
+    if (remaining.length <= maxChars) {
+      chunks.push(remaining)
+      break
+    }
+    const slice = remaining.slice(0, maxChars)
+    const lastBreak = Math.max(
+      slice.lastIndexOf('. '),
+      slice.lastIndexOf('? '),
+      slice.lastIndexOf('! '),
+      slice.lastIndexOf('। '),
+      slice.lastIndexOf('\n')
+    )
+    const cutAt = lastBreak > 50 ? lastBreak + 1 : maxChars
+    chunks.push(remaining.slice(0, cutAt).trim())
+    remaining = remaining.slice(cutAt).trim()
+  }
+  return chunks.filter(c => c.length > 0)
 }
 
 async function playNextAudio() {
-  if (audioQueue.length === 0) {
-    isPlayingAudio = false
-    isSpeaking.value = false
-    currentAudio = null
-    return
-  }
-
+  if (isPlayingAudio) return
   isPlayingAudio = true
-  const b64 = audioQueue.shift()
-  if (!b64) {
-    isPlayingAudio = false
-    isSpeaking.value = false
-    return
-  }
+  isSpeaking.value = true
 
-  let url = null
-  try {
-    const binary = atob(b64)
-    const bytes = new Uint8Array(binary.length)
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
-    const blob = new Blob([bytes], { type: 'audio/mpeg' })
-    url = URL.createObjectURL(blob)
+  while (audioQueue.length > 0) {
+    const b64 = audioQueue.shift()
+    if (!b64) continue
 
-    await new Promise((resolve) => {
-      const audio = new Audio(url)
-      currentAudio = audio
-      isSpeaking.value = true
+    let url = null
+    try {
+      const binary = atob(b64)
+      const bytes = new Uint8Array(binary.length)
+      for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i)
+      const blob = new Blob([bytes], { type: 'audio/mpeg' })
+      url = URL.createObjectURL(blob)
+      currentAudioUrl = url
 
-      audio.onended = () => {
-        if (url) URL.revokeObjectURL(url)
-        url = null
-        currentAudio = null
-        resolve()
-      }
-      audio.onerror = () => {
-        if (url) URL.revokeObjectURL(url)
-        url = null
-        currentAudio = null
-        resolve()
-      }
-      audio.play().catch(() => {
-        if (url) URL.revokeObjectURL(url)
-        url = null
-        currentAudio = null
-        resolve()
+      await new Promise((resolve) => {
+        resolveCurrentAudio = resolve
+        const audio = new Audio(url)
+        currentAudio = audio
+
+        audio.onended = () => {
+          if (url) {
+            try { URL.revokeObjectURL(url) } catch (_) {}
+          }
+          if (currentAudioUrl === url) currentAudioUrl = null
+          currentAudio = null
+          resolveCurrentAudio = null
+          resolve()
+        }
+        audio.onerror = () => {
+          if (url) {
+            try { URL.revokeObjectURL(url) } catch (_) {}
+          }
+          if (currentAudioUrl === url) currentAudioUrl = null
+          currentAudio = null
+          resolveCurrentAudio = null
+          resolve()
+        }
+        audio.play().catch(() => {
+          if (url) {
+            try { URL.revokeObjectURL(url) } catch (_) {}
+          }
+          if (currentAudioUrl === url) currentAudioUrl = null
+          currentAudio = null
+          resolveCurrentAudio = null
+          resolve()
+        })
       })
-    })
-  } catch (err) {
-    console.error('playNextAudio error:', err)
-    if (url) URL.revokeObjectURL(url)
+    } catch (err) {
+      console.error('playNextAudio error:', err)
+      if (url) {
+        try { URL.revokeObjectURL(url) } catch (_) {}
+      }
+      if (currentAudioUrl === url) currentAudioUrl = null
+      currentAudio = null
+      resolveCurrentAudio = null
+      // Yield to the event loop before continuing the loop to prevent freezing the UI thread if many errors happen
+      await new Promise(r => setTimeout(r, 0))
+    }
   }
 
-  playNextAudio()
+  isPlayingAudio = false
+  isSpeaking.value = false
 }
 
 function sendToAgent(transcript_text) {
@@ -472,13 +619,24 @@ function sendToAgent(transcript_text) {
 function interruptAgent() {
   audioQueue.length = 0
   Object.keys(audioChunkBuffer).forEach(k => delete audioChunkBuffer[k])
-  if (currentAudio) { try { currentAudio.pause() } catch (_) {} currentAudio = null }
   isPlayingAudio = false
   isSpeaking.value = false
   isStreaming.value = false
   isThinking.value = false
   streamingBuffer = ''
   if (streamingEl.value) streamingEl.value.textContent = ''
+  if (currentAudio) {
+    try { currentAudio.pause() } catch (_) {}
+    currentAudio = null
+  }
+  if (currentAudioUrl) {
+    try { URL.revokeObjectURL(currentAudioUrl) } catch (_) {}
+    currentAudioUrl = null
+  }
+  if (resolveCurrentAudio) {
+    resolveCurrentAudio()
+    resolveCurrentAudio = null
+  }
   if (ws.value && ws.value.readyState === WebSocket.OPEN) {
     ws.value.send(JSON.stringify({ type: 'interrupt' }))
   }
@@ -505,7 +663,21 @@ function startListening() {
     }
   }
   recognition.onend = () => { isListening.value = false }
-  recognition.onerror = (e) => { isListening.value = false; if (e.error !== 'no-speech') console.warn('SR error', e.error) }
+  recognition.onerror = (e) => {
+    isListening.value = false
+    console.warn('[STT] Recognition error:', e.error, 'lang:', recognition.lang)
+
+    if (e.error === 'language-not-supported') {
+      agentError.value = `Speech recognition for ${getCurrentLanguage().label} is not supported in this browser. Try speaking in English or Hindi, or install the language pack from Windows Settings → Time & Language → Language.`
+      toast.show(`STT not supported for ${getCurrentLanguage().label} on this device`, 'error', 6000)
+    } else if (e.error === 'not-allowed') {
+      agentError.value = 'Microphone access denied. Please allow microphone access and try again.'
+    } else if (e.error === 'network') {
+      agentError.value = 'Network error during speech recognition. Check your connection.'
+    } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
+      console.warn('[STT] Unhandled error:', e.error)
+    }
+  }
   try { recognition.start(); isListening.value = true } catch (e) { isListening.value = false }
 }
 
@@ -541,6 +713,30 @@ function newSession() {
   if (confirm('Start a new session? Current transcript will be cleared.')) clearTranscript()
 }
 
+async function checkSTTSupport() {
+  const locale = getSttLocale()
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+  if (!SR) return
+
+  const test = new SR()
+  test.lang = locale
+  test.continuous = false
+  test.interimResults = false
+
+  await new Promise((resolve) => {
+    test.onerror = (e) => {
+      if (e.error === 'language-not-supported') {
+        agentError.value = `⚠️ Speech recognition for ${getCurrentLanguage().label} may not be available on this device. Voice input may not work. Try switching to English or Hindi.`
+      }
+      resolve()
+    }
+    test.onstart = () => { test.abort(); resolve() }
+    test.onend = resolve
+    try { test.start() } catch { resolve() }
+    setTimeout(resolve, 2000)
+  })
+}
+
 onMounted(async () => {
   animateWave()
 
@@ -565,10 +761,27 @@ onMounted(async () => {
     }
 
     connectWebSocket()
+    await checkSTTSupport()
   } catch (err) {
     agentError.value = 'Failed to load agents: ' + (err.message || err)
   }
+
+  // Detect voice availability
+  detectVoiceStatus()
+  if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
+    window.speechSynthesis.onvoiceschanged = detectVoiceStatus
+  }
+
+  window.addEventListener('storage', handleStorageEvent)
 })
+
+function handleStorageEvent(e) {
+  if (e.key === 'agent_updated') {
+    console.log('[VOXEN] Agent config updated — reconnecting WebSocket')
+    showKeySetupBanner.value = false
+    reconnectWebSocket()
+  }
+}
 
 onUnmounted(() => {
   intentionalClose.value = true
@@ -577,11 +790,23 @@ onUnmounted(() => {
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
   if (ws.value) try { ws.value.close() } catch (_) {}
   if (recognition) try { recognition.stop() } catch (_) {}
-  if (currentAudio) try { currentAudio.pause() } catch (_) {}
+  if (currentAudio) {
+    try { currentAudio.pause() } catch (_) {}
+    currentAudio = null
+  }
+  if (currentAudioUrl) {
+    try { URL.revokeObjectURL(currentAudioUrl) } catch (_) {}
+    currentAudioUrl = null
+  }
+  if (resolveCurrentAudio) {
+    resolveCurrentAudio()
+    resolveCurrentAudio = null
+  }
   if (waveInterval) clearInterval(waveInterval)
   window.speechSynthesis?.cancel()
   audioQueue.length = 0
   Object.keys(audioChunkBuffer).forEach(k => delete audioChunkBuffer[k])
+  window.removeEventListener('storage', handleStorageEvent)
 })
 
 watch(activeAgentUuid, (v) => {
@@ -699,6 +924,83 @@ watch(activeAgentUuid, (v) => {
   font-size: 20px;
   color: #ef4444;
   flex-shrink: 0;
+}
+
+.setup-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  max-width: 42rem;
+  margin-left: auto;
+  margin-right: auto;
+  background: rgba(251, 191, 36, 0.12);
+  border: 1px solid rgba(251, 191, 36, 0.3);
+  color: #fbbf24;
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.setup-banner > .material-symbols-outlined {
+  font-size: 20px;
+  color: #fbbf24;
+  flex-shrink: 0;
+}
+
+.setup-banner-text {
+  flex: 1;
+  line-height: 1.5;
+  min-width: 200px;
+}
+
+.setup-banner-text strong {
+  color: #fcd34d;
+  font-weight: 600;
+}
+
+.setup-banner-text span {
+  color: rgba(251, 191, 36, 0.85);
+}
+
+.setup-banner-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.setup-btn {
+  padding: 5px 12px;
+  background: rgba(251, 191, 36, 0.2);
+  border: 1px solid rgba(251, 191, 36, 0.4);
+  border-radius: 6px;
+  color: #fbbf24;
+  font-size: 11px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: background 0.15s ease;
+}
+
+.setup-btn:hover {
+  background: rgba(251, 191, 36, 0.3);
+  color: #fcd34d;
+}
+
+.setup-btn-secondary {
+  padding: 5px 12px;
+  background: transparent;
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: 6px;
+  color: rgba(251, 191, 36, 0.7);
+  font-size: 11px;
+  text-decoration: none;
+  transition: background 0.15s ease;
+}
+
+.setup-btn-secondary:hover {
+  background: rgba(251, 191, 36, 0.08);
+  color: #fbbf24;
 }
 
 .error-text {

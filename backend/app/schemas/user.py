@@ -49,6 +49,7 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
     user: UserResponse
+    needs_api_key: bool = False    # new field — safe default
 
 
 class UserUpdate(BaseModel):

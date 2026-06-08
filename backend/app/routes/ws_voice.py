@@ -36,6 +36,7 @@ from app.models.user_api_key import UserApiKey
 from app.utils.encryption import decrypt_key
 from app.llm_router import get_llm, build_system_prompt
 from app.tts_router import synthesize
+from app.services.rag import retrieve_context
 from app.utils.llm_utils import extract_text_from_content
 
 logger = logging.getLogger(__name__)
@@ -149,6 +150,19 @@ async def voice_websocket(
                 full_response = ""
                 llm = get_llm(assignment.llm_provider or "gemini", llm_key)
                 system_prompt = build_system_prompt(agent, language)
+
+                # Inject KB context into system_prompt if the agent has a
+                # knowledge base collection attached.
+                kb_context = ""
+                if agent.kb_collection_name:
+                    try:
+                        kb_context = await retrieve_context(agent.kb_collection_name, text)
+                    except Exception as kb_err:
+                        logger.warning(f"KB retrieval failed: {kb_err}")
+
+                if kb_context:
+                    system_prompt += f"\n\nKNOWLEDGE BASE CONTEXT:\n{kb_context}\n"
+
                 messages = (
                     [("system", system_prompt)]
                     + list(conversation_history)
@@ -176,7 +190,7 @@ async def voice_websocket(
 
                 await websocket.send_json({
                     "type": "agent_response_complete",
-                    "text": full_response,
+                    "text": full_response[:1000] if len(full_response) > 1000 else full_response,
                 })
 
                 # ---- TTS -------------------------------------------

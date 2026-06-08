@@ -10,9 +10,11 @@ from app.services.session_store import (
     create_session, add_message,
     get_session_messages, get_session
 )
-from app.services.llm_agent import run_agent_turn
-from app.llm_router import normalize_language
+from app.llm_router import chat as llm_chat, normalize_language
 from app.models.agent_config import AgentConfig
+from app.models.agent_key_assignment import AgentApiKeyAssignment
+from app.models.user_api_key import UserApiKey
+from app.utils.encryption import decrypt_key
 from app.database import get_db
 
 logger = structlog.get_logger()
@@ -78,17 +80,39 @@ async def handle_webhook(
             agent.kb_collection_name, transcribed_text
         )
 
-    # 7. Run LLM (resolves the agent's per-user API key inside run_agent_turn)
+    # 7. Resolve the agent's per-user API key and run the LLM.
+    assignment = (
+        db.query(AgentApiKeyAssignment)
+        .filter(AgentApiKeyAssignment.agent_id == agent.id)
+        .first()
+    )
+    if not assignment or not assignment.llm_api_key_id:
+        raise HTTPException(
+            status_code=400,
+            detail="No API key attached to this agent."
+        )
+
+    llm_key_row = (
+        db.query(UserApiKey)
+        .filter(UserApiKey.id == assignment.llm_api_key_id)
+        .first()
+    )
+    if not llm_key_row:
+        raise HTTPException(status_code=400, detail="API key record not found")
+
+    llm_key = decrypt_key(llm_key_row.api_key)
+    llm_provider = assignment.llm_provider or "gemini"
+
     try:
-        response_text = await run_agent_turn(
-            db=db,
-            agent=agent,
-            user_text=transcribed_text,
-            system_prompt=agent.voice_system_prompt or agent.system_prompt,
+        response_text = await llm_chat(
+            text=transcribed_text,
             session_messages=session_messages,
+            base_system_prompt=agent.voice_system_prompt or agent.system_prompt,
             kb_context=kb_context,
-            agent_name=agent.wake_word,
+            agent_name=agent.wake_word or agent.name,
             language=language,
+            api_key=llm_key,
+            llm_provider=llm_provider,
         )
     except HTTPException:
         raise
