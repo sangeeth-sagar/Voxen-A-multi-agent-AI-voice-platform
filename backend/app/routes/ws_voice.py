@@ -201,9 +201,10 @@ async def voice_websocket(
 
                 if tts_provider == "browser" or not tts_key:
                     # Let frontend handle TTS using browser SpeechSynthesis
+                    # Cap at 500 chars to match API TTS limit and prevent Chrome crash
                     await websocket.send_json({
                         "type": "tts_browser",
-                        "text": full_response,
+                        "text": full_response[:MAX_TTS_CHARS] if len(full_response) > MAX_TTS_CHARS else full_response,
                         "language": language,
                     })
                 else:
@@ -224,7 +225,7 @@ async def voice_websocket(
                             # Force browser TTS for oversized audio
                             await websocket.send_json({
                                 "type": "tts_browser",
-                                "text": full_response,
+                                "text": full_response[:MAX_TTS_CHARS] if len(full_response) > MAX_TTS_CHARS else full_response,
                                 "language": language,
                             })
                         elif audio_bytes:
@@ -249,7 +250,7 @@ async def voice_websocket(
                         # Fallback to browser TTS on any error
                         await websocket.send_json({
                             "type": "tts_browser",
-                            "text": full_response,
+                            "text": full_response[:MAX_TTS_CHARS] if len(full_response) > MAX_TTS_CHARS else full_response,
                             "language": language,
                         })
                     await websocket.send_json({"type": "tts_end"})

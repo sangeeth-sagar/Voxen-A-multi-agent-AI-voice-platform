@@ -96,6 +96,11 @@
           class="flex-1 py-1.5 bg-secondary/10 hover:bg-secondary/20 hover:text-secondary rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1">
           <span class="material-symbols-outlined text-[14px]">mic</span> Test
         </button>
+        <router-link :to="`/agents/${agent.uuid}/analytics`" @click.stop
+          class="py-1.5 px-2 bg-white/5 hover:bg-primary/20 hover:text-primary rounded-lg transition-colors text-center"
+          title="View Analytics">
+          <span class="material-symbols-outlined text-[14px]">bar_chart</span>
+        </router-link>
       </div>
       <div v-else class="flex items-center gap-2">
         <button @click.stop="$emit('activate', agent)"

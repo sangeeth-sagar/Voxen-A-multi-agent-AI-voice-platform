@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voxen Webhook Quick Tester</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 600px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      background: #f9fafb;
+      color: #111827;
+    }
+    .card {
+      background: white;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      border: 1px solid #e5e7eb;
+    }
+    h2 { margin-top: 0; }
+    .form-group {
+      margin-bottom: 16px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+    input[type="text"], textarea, select {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      box-sizing: border-box;
+    }
+    .tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+    .tab-btn {
+      flex: 1;
+      padding: 8px;
+      background: #e5e7eb;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+    }
+    .tab-btn.active {
+      background: #2563eb;
+      color: white;
+    }
+    button.submit-btn {
+      background: #2563eb;
+      color: white;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+      width: 100%;
+    }
+    button.submit-btn:hover { background: #1d4ed8; }
+    .log-box {
+      margin-top: 20px;
+      background: #1e1e1e;
+      color: #7dd3fc;
+      padding: 12px;
+      border-radius: 6px;
+      font-family: monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 250px;
+      overflow-y: auto;
+    }
+    .audio-section {
+      margin-top: 15px;
+      padding: 10px;
+      background: #f3f4f6;
+      border-radius: 6px;
+      display: none;
+    }
+    @keyframes pulse-dot {
+      0% { opacity: 0.3; transform: scale(0.8); }
+      100% { opacity: 1; transform: scale(1.2); }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h2>Voxen Webhook Tester</h2>
+    
+    <div class="form-group">
+      <label for="webhookUrl">Paste Webhook URL</label>
+      <input type="text" id="webhookUrl" placeholder="http://localhost:8000/api/v1/webhook/agent/your_token_here">
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" id="textMode" onclick="toggleMode('text')">Text Mode</button>
+      <button class="tab-btn" id="audioMode" onclick="toggleMode('audio')">Audio Mode</button>
+    </div>
+
+    <div class="form-group">
+      <label for="sessionId">Session ID</label>
+      <input type="text" id="sessionId" value="session-xyz-123">
+    </div>
+
+    <div class="form-group">
+      <label for="language">Language</label>
+      <select id="language">
+        <option value="en">English (en)</option>
+        <option value="hi">Hindi (hi)</option>
+        <option value="mr">Marathi (mr)</option>
+        <option value="ml">Malayalam (ml)</option>
+      </select>
+    </div>
+
+    <!-- Text Payload Fields -->
+    <div class="form-group" id="textInputs">
+      <label for="textMessage">Prompt Text</label>
+      <textarea id="textMessage" rows="3">hello</textarea>
+    </div>
+
+    <!-- Audio Payload Fields -->
+    <div class="form-group" id="audioInputs" style="display: none;">
+      <label>Voice Input</label>
+      <div style="margin-bottom: 12px;">
+        <button type="button" class="tab-btn" id="recordBtn" onclick="toggleRecording()" style="background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5; display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;">
+          <span id="recordDot" style="width: 10px; height: 10px; background: #dc2626; border-radius: 50%; display: inline-block;"></span>
+          <span id="recordText">Record Microphone</span>
+        </button>
+      </div>
+      <label>Or Choose Local Audio File</label>
+      <input type="file" id="audioFile" accept="audio/*" onchange="recordedBlob = null;">
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="runTest()">Send Request</button>
+
+    <div class="audio-section" id="audioOutputSection">
+      <label>Agent Voice Response</label>
+      <audio id="audioPlayer" controls></audio>
+      <div style="margin-top: 10px; font-size: 12px;">
+        <div><strong>Transcribed:</strong> <span id="transcriptionText">—</span></div>
+        <div><strong>Reply:</strong> <span id="replyText">—</span></div>
+      </div>
+    </div>
+
+    <label style="margin-top: 20px;">Execution Log</label>
+    <div class="log-box" id="logBox">Logs will appear here...</div>
+  </div>
+
+  <script>
+    let mode = 'text';
+    let mediaRecorder = null;
+    let audioChunks = [];
+    let recordedBlob = null;
+    let isRecording = false;
+
+    async function toggleRecording() {
+      const recordBtn = document.getElementById('recordBtn');
+      const recordDot = document.getElementById('recordDot');
+      const recordText = document.getElementById('recordText');
+
+      if (!isRecording) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaRecorder = new MediaRecorder(stream, {
+            mimeType: MediaRecorder.isTypeSupported('audio/webm;codecs=opus') 
+              ? 'audio/webm;codecs=opus' 
+              : 'audio/webm'
+          });
+          audioChunks = [];
+          mediaRecorder.ondataavailable = event => {
+            if (event.data.size > 0) {
+              audioChunks.push(event.data);
+            }
+          };
+          mediaRecorder.onstop = () => {
+            recordedBlob = new Blob(audioChunks, { type: 'audio/webm' });
+            log('Voice recording ready! Click "Send Request" to speak to the agent.');
+            stream.getTracks().forEach(track => track.stop());
+          };
+          mediaRecorder.start();
+          isRecording = true;
+          recordBtn.style.background = '#dc2626';
+          recordBtn.style.color = '#ffffff';
+          recordDot.style.background = '#ffffff';
+          recordDot.style.animation = 'pulse-dot 1s infinite alternate';
+          recordText.innerText = 'Recording... Click to Stop';
+          log('Recording your voice...');
+        } catch (err) {
+          alert('Could not access microphone: ' + err.message);
+        }
+      } else {
+        mediaRecorder.stop();
+        isRecording = false;
+        recordBtn.style.background = '#fee2e2';
+        recordBtn.style.color = '#dc2626';
+        recordDot.style.background = '#dc2626';
+        recordDot.style.animation = 'none';
+        recordText.innerText = 'Record Microphone';
+      }
+    }
+
+    function toggleMode(newMode) {
+      mode = newMode;
+      document.getElementById('textMode').classList.toggle('active', mode === 'text');
+      document.getElementById('audioMode').classList.toggle('active', mode === 'audio');
+      document.getElementById('textInputs').style.display = mode === 'text' ? 'block' : 'none';
+      document.getElementById('audioInputs').style.display = mode === 'audio' ? 'block' : 'none';
+    }
+
+    function log(message, isError = false) {
+      const box = document.getElementById('logBox');
+      if (typeof message === 'object') {
+        box.textContent = JSON.stringify(message, null, 2);
+      } else {
+        box.textContent = message;
+      }
+      box.style.color = isError ? '#f87171' : '#7dd3fc';
+    }
+
+    async function runTest() {
+      const url = document.getElementById('webhookUrl').value.trim();
+      const sessionId = document.getElementById('sessionId').value.trim();
+      const language = document.getElementById('language').value;
+      const submitBtn = document.getElementById('submitBtn');
+
+      if (!url) {
+        alert('Please enter a Webhook URL');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Sending...';
+      document.getElementById('audioOutputSection').style.display = 'none';
+      log('Preparing request...');
+
+      try {
+        if (mode === 'text') {
+          const text = document.getElementById('textMessage').value;
+          const payload = { text, session_id: sessionId, language };
+
+          log('Sending POST to ' + url + '\nPayload:\n' + JSON.stringify(payload, null, 2));
+
+          const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            throw new Error(`Status ${response.status}: ${await response.text()}`);
+          }
+
+          const data = await response.json();
+          log(data);
+        } else {
+          const fileInput = document.getElementById('audioFile');
+          let blobToSend = recordedBlob;
+
+          if (!blobToSend && fileInput.files.length > 0) {
+            blobToSend = fileInput.files[0];
+          }
+
+          if (!blobToSend) {
+            throw new Error('Please record some speech or choose an audio file first.');
+          }
+
+          const formData = new FormData();
+          formData.append('audio', blobToSend, 'recording.webm');
+          formData.append('session_id', sessionId);
+          formData.append('language', language);
+
+          log('Sending speech audio to ' + url);
+
+          const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+          });
+
+          if (!response.ok) {
+            throw new Error(`Status ${response.status}: ${await response.text()}`);
+          }
+
+          const transcribed = response.headers.get('X-Transcribed-Text');
+          const reply = response.headers.get('X-Response-Text');
+          const audioBlob = await response.blob();
+          const audioUrl = URL.createObjectURL(audioBlob);
+
+          document.getElementById('audioPlayer').src = audioUrl;
+          document.getElementById('transcriptionText').innerText = transcribed || '—';
+          document.getElementById('replyText').innerText = reply || '—';
+          document.getElementById('audioOutputSection').style.display = 'block';
+
+          // Autoplay the voice response
+          document.getElementById('audioPlayer').play().catch(e => {
+            log('Audio received, but click play on player (browser blocked autoplay).');
+          });
+
+          log({
+            message: 'Audio received successfully',
+            transcribed,
+            reply,
+            audio_size: `${audioBlob.size} bytes`
+          });
+        }
+      } catch (err) {
+        log('Error: ' + err.message, true);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Send Request';
+      }
+    }
+  </script>
+</body>
+</html>

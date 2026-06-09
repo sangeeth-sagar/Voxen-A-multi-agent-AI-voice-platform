@@ -363,7 +363,10 @@ function connectWebSocket() {
         break
 
       case 'tts_browser':
-        fallbackBrowserTTS(msg.text)
+        const ttsText = msg.text?.length > 500
+          ? msg.text.slice(0, 500) + '…'
+          : msg.text
+        fallbackBrowserTTS(ttsText)
         break
 
       case 'tts_end':
@@ -443,92 +446,86 @@ function reconnectWebSocket() {
   }, 500)
 }
 
-async function fallbackBrowserTTS(text) {
-  if (!text || !window.speechSynthesis) return
+function fallbackBrowserTTS(text) {
+  if (!text?.trim()) return
 
-  const MAX_CHARS = 200
-  const chunks = splitIntoChunks(text, MAX_CHARS)
+  try { window.speechSynthesis.cancel() } catch (_) {}
 
-  window.speechSynthesis.cancel()
-
-  const LOCALE_MAP = { en: 'en-GB', hi: 'hi-IN', mr: 'mr-IN', ml: 'ml-IN' }
-  const locale = LOCALE_MAP[selectedLanguage.value] || 'en-GB'
-
-  const FALLBACK_CHAIN = {
-    'en-GB': ['en-GB', 'en-US', 'en-IN', 'en'],
-    'hi-IN': ['hi-IN', 'en-IN', 'en-US'],
-    'mr-IN': ['mr-IN', 'hi-IN', 'en-IN', 'en-US'],
-    'ml-IN': ['ml-IN', 'hi-IN', 'en-IN', 'en-US'],
+  const LOCALE_MAP = {
+    en: 'en-US',
+    hi: 'hi-IN',
+    mr: 'hi-IN',
+    ml: 'hi-IN',
   }
+  const lang = LOCALE_MAP[selectedLanguage.value] || 'en-US'
 
-  let voices = window.speechSynthesis.getVoices()
-  if (!voices.length) {
-    await new Promise(resolve => {
-      window.speechSynthesis.onvoiceschanged = () => {
-        voices = window.speechSynthesis.getVoices()
-        resolve()
-      }
-      setTimeout(resolve, 1000)
-    })
-  }
-
-  const chain = FALLBACK_CHAIN[locale] || [locale, 'en-US']
-  let selectedVoice = null
-  for (const fallbackLocale of chain) {
-    selectedVoice =
-      voices.find(v => v.lang === fallbackLocale) ||
-      voices.find(v => v.lang.startsWith(fallbackLocale.split('-')[0]))
-    if (selectedVoice) break
-  }
+  const chunks = chunkText(text, 180)
 
   isSpeaking.value = true
 
-  for (let i = 0; i < chunks.length; i++) {
-    await new Promise((resolve) => {
-      const u = new SpeechSynthesisUtterance(chunks[i])
-      u.lang = selectedVoice ? selectedVoice.lang : locale
-      if (selectedVoice) u.voice = selectedVoice
-      u.rate = 0.92
-      u.pitch = 1.0
-      u.volume = 1.0
+  let index = 0
 
-      const resumeTimer = setInterval(() => {
-        if (window.speechSynthesis.paused) {
-          window.speechSynthesis.resume()
-        }
-      }, 500)
+  function speakNext() {
+    if (index >= chunks.length) {
+      isSpeaking.value = false
+      return
+    }
 
-      u.onend = () => { clearInterval(resumeTimer); resolve() }
-      u.onerror = (e) => { clearInterval(resumeTimer); console.warn('[TTS] error:', e.error); resolve() }
+    const chunk = chunks[index++]
+    const utter = new SpeechSynthesisUtterance(chunk)
+    utter.lang = lang
+    utter.rate = 0.9
+    utter.pitch = 1
+    utter.volume = 1
 
-      window.speechSynthesis.speak(u)
-    })
+    const voices = window.speechSynthesis.getVoices()
+    const voice =
+      voices.find(v => v.lang === lang) ||
+      voices.find(v => v.lang.startsWith(lang.split('-')[0])) ||
+      voices.find(v => v.lang.startsWith('en'))
+    if (voice) utter.voice = voice
+
+    utter.onend = () => speakNext()
+    utter.onerror = (e) => {
+      console.warn('[TTS] chunk error:', e.error)
+      speakNext()
+    }
+
+    const timer = setInterval(() => {
+      if (window.speechSynthesis.paused) {
+        window.speechSynthesis.resume()
+      }
+    }, 250)
+
+    utter.onend = () => { clearInterval(timer); speakNext() }
+    utter.onerror = (e) => { clearInterval(timer); console.warn('[TTS]', e.error); speakNext() }
+
+    try {
+      window.speechSynthesis.speak(utter)
+    } catch (e) {
+      clearInterval(timer)
+      console.error('[TTS] speak() threw:', e)
+      speakNext()
+    }
   }
 
-  isSpeaking.value = false
+  setTimeout(speakNext, 50)
 }
 
-function splitIntoChunks(text, maxChars) {
-  if (text.length <= maxChars) return [text]
+function chunkText(text, maxLen) {
+  if (text.length <= maxLen) return [text]
   const chunks = []
-  let remaining = text
-  while (remaining.length > 0) {
-    if (remaining.length <= maxChars) {
-      chunks.push(remaining)
-      break
+  const sentences = text.match(/[^.!?।\n]+[.!?।\n]*/g) || [text]
+  let current = ''
+  for (const s of sentences) {
+    if ((current + s).length > maxLen && current.length > 0) {
+      chunks.push(current.trim())
+      current = s
+    } else {
+      current += s
     }
-    const slice = remaining.slice(0, maxChars)
-    const lastBreak = Math.max(
-      slice.lastIndexOf('. '),
-      slice.lastIndexOf('? '),
-      slice.lastIndexOf('! '),
-      slice.lastIndexOf('। '),
-      slice.lastIndexOf('\n')
-    )
-    const cutAt = lastBreak > 50 ? lastBreak + 1 : maxChars
-    chunks.push(remaining.slice(0, cutAt).trim())
-    remaining = remaining.slice(cutAt).trim()
   }
+  if (current.trim()) chunks.push(current.trim())
   return chunks.filter(c => c.length > 0)
 }
 
@@ -644,11 +641,28 @@ function interruptAgent() {
 
 function startListening() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition
-  if (!SR) { toast.show('Speech recognition not supported in this browser.', 'error'); return }
+  if (!SR) {
+    toast.show('Speech recognition not supported in this browser.', 'error')
+    return
+  }
+
   recognition = new SR()
-  recognition.lang = getSttLocale()
+
+  const sttLocale = getSttLocale()
+  const CHROME_UNSUPPORTED = ['ml-IN', 'mr-IN']
+  recognition.lang = CHROME_UNSUPPORTED.includes(sttLocale) ? 'en-IN' : sttLocale
+
+  if (CHROME_UNSUPPORTED.includes(sttLocale)) {
+    toast.show(
+      `${getCurrentLanguage().label} voice input not supported on this device — using English STT. Agent will still reply in ${getCurrentLanguage().label}.`,
+      'info',
+      5000
+    )
+  }
+
   recognition.interimResults = true
   recognition.continuous = false
+
   recognition.onresult = (e) => {
     let interim = '', final = ''
     for (const r of e.results) {
@@ -662,23 +676,28 @@ function startListening() {
       sendToAgent(final)
     }
   }
+
   recognition.onend = () => { isListening.value = false }
+
   recognition.onerror = (e) => {
     isListening.value = false
-    console.warn('[STT] Recognition error:', e.error, 'lang:', recognition.lang)
-
     if (e.error === 'language-not-supported') {
-      agentError.value = `Speech recognition for ${getCurrentLanguage().label} is not supported in this browser. Try speaking in English or Hindi, or install the language pack from Windows Settings → Time & Language → Language.`
-      toast.show(`STT not supported for ${getCurrentLanguage().label} on this device`, 'error', 6000)
+      recognition.lang = 'en-US'
+      try { recognition.start(); isListening.value = true } catch (_) {}
     } else if (e.error === 'not-allowed') {
-      agentError.value = 'Microphone access denied. Please allow microphone access and try again.'
-    } else if (e.error === 'network') {
-      agentError.value = 'Network error during speech recognition. Check your connection.'
+      agentError.value = 'Microphone access denied. Please allow microphone.'
     } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
-      console.warn('[STT] Unhandled error:', e.error)
+      console.warn('[STT] error:', e.error)
     }
   }
-  try { recognition.start(); isListening.value = true } catch (e) { isListening.value = false }
+
+  try {
+    recognition.start()
+    isListening.value = true
+  } catch (e) {
+    isListening.value = false
+    console.error('[STT] start failed:', e)
+  }
 }
 
 function stopListening() {
@@ -737,8 +756,27 @@ async function checkSTTSupport() {
   })
 }
 
+let speakingCheckTimer = null
+
+function startSpeakingWatchdog() {
+  clearInterval(speakingCheckTimer)
+  speakingCheckTimer = setInterval(() => {
+    if (isSpeaking.value && !window.speechSynthesis.speaking && !window.speechSynthesis.pending) {
+      isSpeaking.value = false
+    }
+  }, 1000)
+}
+
 onMounted(async () => {
+  if (window.speechSynthesis) {
+    window.speechSynthesis.getVoices()
+    window.speechSynthesis.onvoiceschanged = () => {
+      window.speechSynthesis.getVoices()
+    }
+  }
+
   animateWave()
+  startSpeakingWatchdog()
 
   try {
     const data = await apiFetch('/api/v1/agents')
@@ -787,6 +825,7 @@ onUnmounted(() => {
   intentionalClose.value = true
   clearInterval(pingInterval.value)
   pingInterval.value = null
+  clearInterval(speakingCheckTimer)
   if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null }
   if (ws.value) try { ws.value.close() } catch (_) {}
   if (recognition) try { recognition.stop() } catch (_) {}

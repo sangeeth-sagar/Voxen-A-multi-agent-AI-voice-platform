@@ -66,12 +66,12 @@ async def handle_webhook(
     # 4. Get or create session
     session = None
     if session_id:
-        session = get_session(db, session_id)
+        session = await get_session(db, session_id)
     if not session:
-        session = create_session(db, agent_id=agent.id)
+        session = await create_session(db, agent_id=agent.id)
 
     # 5. Get last 10 messages
-    session_messages = get_session_messages(db, session.session_id)
+    session_messages = await get_session_messages(db, session.session_id)
 
     # 6. Get RAG context if kb enabled
     kb_context = ""

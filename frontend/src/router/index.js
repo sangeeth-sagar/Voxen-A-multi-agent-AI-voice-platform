@@ -14,6 +14,8 @@ const routes = [
     children: [
       { path: '',        name: 'Voice',    component: () => import('@/views/VoiceView.vue') },
       { path: 'agents',  name: 'Agents',   component: () => import('@/views/AgentsView.vue') },
+      { path: 'analytics', name: 'Analytics', component: () => import('@/views/MetricsDashboardView.vue') },
+      { path: 'agents/:uuid/analytics', name: 'AgentAnalytics', component: () => import('@/views/MetricsDashboardView.vue') },
       { path: 'profile', name: 'Profile',  component: () => import('@/views/ProfileView.vue') },
     ]
   },

@@ -57,6 +57,7 @@ class AgentConfigUpdate(BaseModel):
 
 
 class AgentConfigResponse(BaseModel):
+    id: int
     uuid: str
     name: str
     description: Optional[str]

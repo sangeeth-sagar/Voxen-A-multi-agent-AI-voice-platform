@@ -8,9 +8,14 @@
         <span class="nav-label">Voice</span>
       </RouterLink>
 
-      <RouterLink to="/agents" class="nav-item" :class="{ active: $route.path === '/agents' }">
+      <RouterLink to="/agents" class="nav-item" :class="{ active: $route.name === 'Agents' }">
         <span class="material-symbols-outlined">smart_toy</span>
         <span class="nav-label">Agents</span>
+      </RouterLink>
+
+      <RouterLink to="/analytics" class="nav-item" :class="{ active: $route.name === 'Analytics' || $route.name === 'AgentAnalytics' }">
+        <span class="material-symbols-outlined">bar_chart</span>
+        <span class="nav-label">Analytics</span>
       </RouterLink>
 
       <RouterLink to="/profile" class="nav-item" :class="{ active: $route.path === '/profile' }">
