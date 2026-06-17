@@ -1,140 +1,382 @@
 <template>
-  <div
+  <div 
     :class="[
-      'glass-card rounded-2xl p-6 cursor-pointer',
-      agent.is_voice_agent ? 'card-voice' : 'card-bi'
+      'glass-card rounded-2xl p-5 border relative overflow-hidden flex flex-col justify-between transition-all duration-300 group',
+      agent.is_active ? 'border-primary/20' : 'border-outline-variant/50'
     ]"
+    @click="$emit('detail', agent)"
   >
-    <!-- Header -->
-    <div class="flex items-start justify-between mb-4">
+    <!-- Card Header -->
+    <div class="flex items-start justify-between mb-3">
       <div :class="[
-        'w-11 h-11 rounded-xl flex items-center justify-center',
-        agent.is_voice_agent ? 'bg-secondary/10' : 'bg-primary/10'
+        'w-10 h-10 rounded-xl flex items-center justify-center',
+        agent.is_active ? 'bg-primary/10 text-primary' : 'bg-surface-container-high text-on-surface-variant'
       ]">
-        <span :class="['material-symbols-outlined icon-filled', agent.is_voice_agent ? 'text-secondary' : 'text-primary']">
-          {{ agent.is_voice_agent ? 'mic' : 'smart_toy' }}
+        <!-- Dynamic Node Icon matching fleet theme -->
+        <span class="material-symbols-outlined icon-filled text-lg">
+          {{ nodeIcon }}
         </span>
       </div>
+
       <div class="flex items-center gap-1.5">
-        <span v-if="agent.is_template" class="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-mono text-[10px] uppercase">Template</span>
-        <span v-if="agent.is_public" class="px-2 py-0.5 rounded-full bg-white/5 text-on-surface-variant font-mono text-[10px] uppercase">Public</span>
-        <!-- Activation Status Indicator -->
-        <span
-          :class="[
-            'w-2 h-2 rounded-full',
-            agent.is_active ? 'bg-green-400 animate-pulse' : 'bg-gray-400'
-          ]"
-        ></span>
+        <span v-if="agent.is_template" class="badge-tag">Template</span>
+        <span :class="['status-indicator-badge', statusText]">
+          <span class="pulse-dot" v-if="agent.is_active"></span>
+          {{ statusText }}
+        </span>
       </div>
     </div>
 
-    <h3 class="font-sans font-semibold text-sm text-white mb-1 line-clamp-1">{{ agent.name }}</h3>
-    <!-- Webhook Badge -->
-    <div v-if="agent.is_active" class="flex items-center gap-1 mb-2">
-      <span
-        class="px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 text-[10px] font-mono"
-      >
-        WEBHOOK ACTIVE
-      </span>
-      <button
-        @click.stop="copyWebhook"
-        class="text-green-400 hover:text-green-300 transition-colors text-[10px]"
-        title="Copy webhook URL"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          class="h-3 w-3"
-          viewBox="0 0 20 20"
-          fill="currentColor"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M4 4a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H4zm5 6a2 2 0 01-2 2H7a2 2 0 01-2-2v-2a2 2 0 012-2h2a2 2 0 012 2v2zm5-4a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2h-2zm-3 10a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2a2 2 0 012-2h2a2 2 0 012 2v2z"
-            clip-rule="evenodd"
-          />
-        </svg>
+    <!-- Node Body -->
+    <div class="space-y-1 flex-1">
+      <h3 class="font-sans font-bold text-sm text-on-surface line-clamp-1">
+        {{ agent.name }}
+      </h3>
+      <p class="text-[11px] text-on-surface-variant line-clamp-2 leading-relaxed">
+        {{ agent.description || 'Monitoring network logs and processing voice system flows.' }}
+      </p>
+    </div>
+
+    <!-- Node Metrics / Status Footer (Backend-backed) -->
+    <div class="pt-4 mt-3 border-t border-outline-variant/30 flex items-center justify-between text-[10px] font-mono text-on-surface-variant">
+      <div class="min-w-0 flex-1">
+        <span class="text-[9px] text-on-surface-variant/50 uppercase font-mono block">INTEGRATION</span>
+        <span class="font-bold text-on-surface truncate block pr-2">
+          {{ agent.is_voice_agent ? agent.voice_language : (agent.tools_enabled || []).slice(0, 2).join(', ') || 'No tools' }}
+        </span>
+      </div>
+      <div class="text-right shrink-0">
+        <span class="text-[9px] text-on-surface-variant/50 uppercase font-mono block">USAGE</span>
+        <span class="font-bold text-on-surface">{{ agent.use_count }} sessions</span>
+      </div>
+    </div>
+
+    <!-- Hover Actions Cover Panel -->
+    <div class="absolute inset-0 bg-surface/90 html-dark:bg-[#001710]/95 backdrop-blur-sm flex flex-col justify-center p-4 gap-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-20" @click.stop>
+      <div class="text-center mb-1">
+        <span class="text-xs font-bold text-on-surface block">{{ agent.name }}</span>
+        <span class="text-[9px] font-mono text-on-surface-variant">{{ agent.is_voice_agent ? 'Voice Agent' : 'BI Agent' }}</span>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button @click="$emit('edit', agent)" class="btn-action">
+          <span class="material-symbols-outlined text-xs">edit</span>
+          Edit Node
+        </button>
+        <button @click="$emit('detail', agent)" class="btn-action">
+          <span class="material-symbols-outlined text-xs">webhook</span>
+          Webhook
+        </button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <button v-if="agent.is_active" @click="$emit('deactivate', agent)" class="btn-action-danger">
+          <span class="material-symbols-outlined text-xs">power_settings_new</span>
+          Deactivate
+        </button>
+        <button v-else @click="$emit('activate', agent)" class="btn-action-success">
+          <span class="material-symbols-outlined text-xs">play_circle</span>
+          Activate
+        </button>
+
+        <button @click="testAgent" class="btn-action-primary">
+          <span class="material-symbols-outlined text-xs">mic</span>
+          Launch Lab
+        </button>
+      </div>
+
+      <button @click="$emit('delete', agent)" class="text-[10px] text-error hover:underline flex items-center justify-center gap-1 mt-1">
+        <span class="material-symbols-outlined text-xs">delete</span>
+        Delete
       </button>
-    </div>
-    <p class="text-[12px] text-on-surface-variant line-clamp-2 mb-4">{{ agent.description || 'No description' }}</p>
-
-    <!-- Meta -->
-    <div class="flex items-center justify-between text-[11px] font-mono">
-      <span class="text-on-surface-variant/50">
-        <span v-if="agent.is_voice_agent">{{ agent.voice_language }}</span>
-        <span v-else>{{ (agent.tools_enabled || []).slice(0, 2).join(', ') }}</span>
-      </span>
-      <span class="text-on-surface-variant/40">{{ agent.use_count }} uses</span>
-    </div>
-
-    <!-- Actions -->
-    <div class="flex flex-col gap-2 mt-4 pt-4 border-t border-white/5">
-      <!-- Row 1 (always visible) -->
-      <div class="flex items-center gap-2">
-        <button @click.stop="$emit('edit', agent)"
-          class="flex-1 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">edit</span> Edit
-        </button>
-        <button @click.stop="$emit('detail', agent)"
-          class="flex-1 py-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1"
-          title="Webhook & details">
-          <span class="material-symbols-outlined text-[14px]">webhook</span> Webhook
-        </button>
-        <button @click.stop="$emit('delete', agent)"
-          class="py-1.5 px-2 bg-white/5 hover:bg-error/20 hover:text-error rounded-lg transition-colors"
-          title="Delete">
-          <span class="material-symbols-outlined text-[14px]">delete</span>
-        </button>
-      </div>
-      
-      <!-- Row 2 (conditional) -->
-      <div v-if="agent.is_active" class="flex items-center gap-2">
-        <button @click.stop="$emit('deactivate', agent)"
-          class="flex-1 py-1.5 bg-error/10 hover:bg-error/20 hover:text-error rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">radio_button_unchecked</span> Deactivate
-        </button>
-        <button @click.stop="$emit('test', agent)"
-          class="flex-1 py-1.5 bg-secondary/10 hover:bg-secondary/20 hover:text-secondary rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">mic</span> Test
-        </button>
-        <router-link :to="`/agents/${agent.uuid}/analytics`" @click.stop
-          class="py-1.5 px-2 bg-white/5 hover:bg-primary/20 hover:text-primary rounded-lg transition-colors text-center"
-          title="View Analytics">
-          <span class="material-symbols-outlined text-[14px]">bar_chart</span>
-        </router-link>
-      </div>
-      <div v-else class="flex items-center gap-2">
-        <button @click.stop="$emit('activate', agent)"
-          class="flex-1 py-1.5 bg-success/10 hover:bg-success/20 hover:text-success rounded-lg text-xs font-medium transition-colors flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">check_circle</span> Activate
-        </button>
-      </div>
-      
-      <!-- Clone button (only if is_public or is_template) -->
-      <div class="flex justify-center">
-        <button v-if="agent.is_public || agent.is_template" @click.stop="$emit('clone', agent)"
-          class="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 rounded-lg text-xs font-medium text-primary transition-colors flex items-center justify-center gap-1">
-          <span class="material-symbols-outlined text-[14px]">content_copy</span> Clone
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useToastStore } from '@/stores/toast'
 
-defineProps({ agent: { type: Object, required: true } })
-defineEmits(['edit', 'clone', 'delete', 'activate', 'deactivate', 'test', 'detail'])
+const props = defineProps({ agent: { type: Object, required: true } })
+const emit = defineEmits(['edit', 'clone', 'delete', 'activate', 'deactivate', 'test', 'detail'])
+const router = useRouter()
+const toast = useToastStore()
 
-function copyWebhook() {
-  navigator.clipboard.writeText(agent.webhook_url || '').then(() => {
-    // Use toast store to show success message
-    const toastStore = useToastStore()
-    toastStore.show('Webhook URL copied!', 'success')
-  }).catch(err => {
-    console.error('Failed to copy webhook URL:', err)
-    const toastStore = useToastStore()
-    toastStore.show('Failed to copy webhook URL', 'error')
-  })
+const statusText = computed(() => {
+  if (props.agent.is_template) return 'SYNCING'
+  return props.agent.is_active ? 'ACTIVE' : 'STANDBY'
+})
+
+const nodeIcon = computed(() => {
+  if (props.agent.is_template) return 'sync'
+  if (!props.agent.is_active) return 'nightlight'
+  
+  // Dynamic active icons
+  const charSum = props.agent.name.charCodeAt(0) || 0
+  if (charSum % 3 === 0) return 'bolt' // lightning
+  if (charSum % 3 === 1) return 'shield' // shield/security
+  return 'public' // globe/geo
+})
+
+
+
+function testAgent() {
+  localStorage.setItem('active_agent', props.agent.uuid)
+  toast.show(`Setting active agent: ${props.agent.name}`, 'info')
+  router.push('/')
 }
 </script>
+
+<style scoped>
+.badge-tag {
+  background: var(--color-primary-container);
+  color: var(--color-primary);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+html.dark .badge-tag {
+  background: rgba(165, 209, 170, 0.15);
+  color: #a5d1aa;
+}
+
+/* Status Indicator Badges */
+.status-indicator-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.status-indicator-badge.ACTIVE {
+  background: rgba(14, 108, 74, 0.12);
+  color: var(--color-success);
+  border: 1px solid rgba(14, 108, 74, 0.25);
+}
+
+html.dark .status-indicator-badge.ACTIVE {
+  background: rgba(165, 209, 170, 0.15);
+  color: #a5d1aa;
+  border-color: rgba(165, 209, 170, 0.3);
+}
+
+.status-indicator-badge.STANDBY {
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+  border: 1px solid var(--color-outline-variant);
+}
+
+html.dark .status-indicator-badge.STANDBY {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--color-outline);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+.status-indicator-badge.SYNCING {
+  background: rgba(196, 138, 0, 0.12);
+  color: var(--color-tactical-amber);
+  border: 1px solid rgba(196, 138, 0, 0.25);
+}
+
+html.dark .status-indicator-badge.SYNCING {
+  background: rgba(255, 187, 12, 0.12);
+  color: #ffbb0c;
+  border-color: rgba(255, 187, 12, 0.25);
+}
+
+.pulse-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse-animation 1.5s infinite;
+}
+
+@keyframes pulse-animation {
+  0% { transform: scale(0.9); opacity: 1; }
+  50% { transform: scale(1.4); opacity: 0.5; }
+  100% { transform: scale(0.9); opacity: 1; }
+}
+
+/* Action covers */
+.btn-action {
+  background: var(--color-surface-container-high);
+  border: 1px solid var(--color-outline-variant);
+  color: var(--color-on-surface);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.btn-action:hover {
+  background: var(--color-surface-container-highest);
+}
+
+html.dark .btn-action {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+html.dark .btn-action:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.btn-action-primary {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: none;
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+html.dark .btn-action-primary {
+  background: #0d3c2f;
+  color: #a5d1aa;
+  border: 1px solid rgba(165, 209, 170, 0.2);
+}
+
+.btn-action-primary:hover {
+  filter: brightness(1.15);
+}
+
+.btn-action-danger {
+  background: rgba(186, 26, 26, 0.1);
+  color: var(--color-error);
+  border: 1px solid rgba(186, 26, 26, 0.2);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.btn-action-danger:hover {
+  background: rgba(186, 26, 26, 0.15);
+}
+
+.btn-action-success {
+  background: rgba(14, 108, 74, 0.1);
+  color: var(--color-success);
+  border: 1px solid rgba(14, 108, 74, 0.2);
+  border-radius: 8px;
+  padding: 6px;
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.btn-action-success:hover {
+  background: rgba(14, 108, 74, 0.15);
+}
+
+/* Dark mode light card override */
+html.dark .glass-card {
+  background: #f3f4f5 !important;
+  color: #191c1d !important;
+  border-color: #d9dadb !important;
+}
+
+html.dark .glass-card h3 {
+  color: #191c1d !important;
+}
+
+html.dark .glass-card p {
+  color: #414844 !important;
+}
+
+html.dark .glass-card .font-bold.text-on-surface {
+  color: #191c1d !important;
+}
+
+html.dark .glass-card .text-on-surface-variant {
+  color: #414844 !important;
+}
+
+html.dark .glass-card .status-indicator-badge.STANDBY {
+  background: #d9dadb !important;
+  color: #414844 !important;
+  border-color: #c1c8c2 !important;
+}
+
+/* Hover cover panel on dark mode cards */
+html.dark .translate-y-full {
+  background: rgba(243, 244, 245, 0.98) !important;
+  color: #191c1d !important;
+}
+
+html.dark .group-hover\:translate-y-0 {
+  background: rgba(243, 244, 245, 0.98) !important;
+  color: #191c1d !important;
+}
+
+html.dark .btn-action {
+  background: #edeeef !important;
+  border-color: #c1c8c2 !important;
+  color: #012d1d !important;
+}
+
+html.dark .btn-action:hover {
+  background: #d9dadb !important;
+}
+
+html.dark .btn-action-primary {
+  background: #0e6c4a !important;
+  color: #ffffff !important;
+  border: none !important;
+}
+
+html.dark .btn-action-primary:hover {
+  background: #012d1d !important;
+}
+
+html.dark .btn-action-danger {
+  background: rgba(186, 26, 26, 0.1) !important;
+  color: #ba1a1a !important;
+  border: 1px solid rgba(186, 26, 26, 0.3) !important;
+}
+
+html.dark .btn-action-danger:hover {
+  background: rgba(186, 26, 26, 0.2) !important;
+}
+
+html.dark .btn-action-success {
+  background: rgba(14, 108, 74, 0.1) !important;
+  color: #0e6c4a !important;
+  border: 1px solid rgba(14, 108, 74, 0.3) !important;
+}
+
+html.dark .btn-action-success:hover {
+  background: rgba(14, 108, 74, 0.2) !important;
+}
+</style>

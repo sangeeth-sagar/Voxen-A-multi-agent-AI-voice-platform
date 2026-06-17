@@ -73,8 +73,13 @@ def financial(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    agent = _verify_agent_owner(agent_uuid, current_user, db)
-    return get_financial_metrics(db, agent.id, range)
+    return {
+        "estimated_cost_today": 0.0,
+        "estimated_cost_period": 0.0,
+        "estimated_cost_monthly": 0.0,
+        "costs_by_service": {},
+        "time_range": range,
+    }
 
 
 @router.get("/{agent_uuid}/reliability")

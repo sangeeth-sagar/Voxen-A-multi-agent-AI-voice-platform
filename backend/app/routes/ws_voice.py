@@ -25,6 +25,8 @@ import base64
 import logging
 import sys
 import traceback
+import time
+import uuid
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.orm import Session
@@ -38,6 +40,7 @@ from app.llm_router import get_llm, build_system_prompt
 from app.tts_router import synthesize
 from app.services.rag import retrieve_context
 from app.utils.llm_utils import extract_text_from_content
+from app.models.api_call import ApiCall
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +113,7 @@ async def voice_websocket(
             if tts_key_row:
                 tts_key = decrypt_key(tts_key_row.api_key)
 
+        session_id = f"ws_{uuid.uuid4().hex[:12]}"
         conversation_history: list = []
         await websocket.send_json({"type": "ready", "agent": agent.name})
 
@@ -143,10 +147,13 @@ async def voice_websocket(
             if not text:
                 continue
 
+            turn_start = time.time()
+
             await websocket.send_json({"type": "user_transcript", "text": text})
             await websocket.send_json({"type": "agent_thinking"})
 
             try:
+                llm_start = time.time()
                 full_response = ""
                 llm = get_llm(assignment.llm_provider or "gemini", llm_key)
                 system_prompt = build_system_prompt(agent, language)
@@ -188,6 +195,8 @@ async def voice_websocket(
                             {"type": "agent_token", "token": token}
                         )
 
+                llm_ms = (time.time() - llm_start) * 1000
+
                 await websocket.send_json({
                     "type": "agent_response_complete",
                     "text": full_response[:1000] if len(full_response) > 1000 else full_response,
@@ -198,6 +207,7 @@ async def voice_websocket(
                 # lets the frontend use SpeechSynthesis (zero memory cost
                 # compared to streaming a multi-MB MP3 through base64).
                 tts_provider = assignment.tts_provider or "browser"
+                tts_start = time.time()
 
                 if tts_provider == "browser" or not tts_key:
                     # Let frontend handle TTS using browser SpeechSynthesis
@@ -255,6 +265,29 @@ async def voice_websocket(
                         })
                     await websocket.send_json({"type": "tts_end"})
 
+                tts_ms = (time.time() - tts_start) * 1000
+                total_ms = (time.time() - turn_start) * 1000
+
+                # Log API call to database
+                try:
+                    api_call = ApiCall(
+                        agent_id=agent.id,
+                        session_id=session_id,
+                        user_text=text,
+                        agent_response=full_response,
+                        stt_latency_ms=0.0,
+                        webhook_latency_ms=round(llm_ms, 1),
+                        tts_latency_ms=round(tts_ms, 1),
+                        total_latency_ms=round(total_ms, 1),
+                        webhook_status=200,
+                        characters_count=len(full_response),
+                        language=language,
+                    )
+                    db.add(api_call)
+                    db.commit()
+                except Exception as db_err:
+                    logger.error(f"Failed to log ApiCall: {db_err}")
+
                 conversation_history.extend([
                     ("human", text),
                     ("assistant", full_response),
@@ -274,6 +307,29 @@ async def voice_websocket(
                     })
                 except Exception:
                     pass
+
+                # Log failed ApiCall to database
+                try:
+                    total_ms = (time.time() - turn_start) * 1000
+                    api_call = ApiCall(
+                        agent_id=agent.id,
+                        session_id=session_id,
+                        user_text=text,
+                        agent_response="",
+                        stt_latency_ms=0.0,
+                        webhook_latency_ms=0.0,
+                        tts_latency_ms=0.0,
+                        total_latency_ms=round(total_ms, 1),
+                        webhook_status=500,
+                        webhook_error_message=error_msg,
+                        characters_count=0,
+                        language=language,
+                    )
+                    db.add(api_call)
+                    db.commit()
+                except Exception as db_err:
+                    logger.error(f"Failed to log failed ApiCall: {db_err}")
+
                 # DO NOT close — keep connection alive for next message
                 continue
 

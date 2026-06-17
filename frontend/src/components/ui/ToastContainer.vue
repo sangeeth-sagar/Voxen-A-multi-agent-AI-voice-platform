@@ -7,9 +7,9 @@
           :key="toast.id"
           :class="[
             'pointer-events-auto flex items-center gap-3 px-5 py-3.5 rounded-xl border font-sans text-sm font-medium shadow-xl backdrop-blur-md',
-            toast.type === 'success' ? 'bg-green-900/60 border-green-500/30 text-green-300' :
-            toast.type === 'error'   ? 'bg-red-900/60 border-error/30 text-error' :
-            'bg-surface-container/80 border-white/10 text-on-surface'
+            toast.type === 'success' ? 'bg-success/15 border-success/30 text-success' :
+            toast.type === 'error' ? 'bg-error-container border-error/30 text-error' :
+            'bg-surface-container border-outline-variant text-on-surface'
           ]"
         >
           <span class="material-symbols-outlined text-base icon-filled">

@@ -384,12 +384,9 @@ def get_platform_metrics(db: Session, time_range: str = "30d"):
     )
 
     active_agents = (
-        db.query(func.count(func.distinct(ApiCall.agent_id)))
-        .filter(
-            func.date(ApiCall.created_at) >= start,
-            func.date(ApiCall.created_at) <= end,
-        )
-        .scalar()
+        db.query(AgentConfig)
+        .filter(AgentConfig.is_active == True)
+        .count()
     )
 
     # Top agents by usage
@@ -430,23 +427,7 @@ def get_platform_metrics(db: Session, time_range: str = "30d"):
     )
     daily_trend = [{"date": str(r.day), "count": r.count} for r in daily_rows]
 
-    # Aggregate cost
-    cost_stats = (
-        db.query(
-            func.sum(ApiCall.audio_duration_seconds).label("audio_sec"),
-            func.sum(ApiCall.characters_count).label("chars"),
-        )
-        .filter(
-            func.date(ApiCall.created_at) >= start,
-            func.date(ApiCall.created_at) <= end,
-        )
-        .first()
-    )
-    total_audio_min = (cost_stats.audio_sec or 0) / 60.0
-    total_chars = cost_stats.chars or 0
-    total_cost = round(
-        total_audio_min * STT_COST_PER_MINUTE + total_chars * TTS_COST_PER_CHARACTER, 4
-    )
+    total_cost = 0.0
 
     return {
         "total_calls": total_calls,

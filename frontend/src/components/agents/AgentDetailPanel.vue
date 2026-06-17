@@ -2,25 +2,23 @@
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="open" class="fixed inset-0 z-[100] flex justify-end">
-        <div @click="$emit('close')" class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+        <div @click="$emit('close')" class="absolute inset-0 bg-black/40 dark:bg-black/60 backdrop-blur-sm" />
 
         <Transition name="drawer">
           <div v-if="open" class="relative z-10 w-[460px] h-full glass-panel flex flex-col overflow-hidden">
-            <!-- Header -->
-            <div class="px-7 py-6 border-b border-white/5 flex items-center justify-between shrink-0">
+            <div class="px-7 py-6 border-b border-outline-variant flex items-center justify-between shrink-0">
               <div>
-                <h2 class="font-sans font-bold text-lg text-white">Agent Details</h2>
+                <h2 class="font-sans font-bold text-lg text-on-surface">Agent Details</h2>
                 <p class="font-mono text-[10px] text-on-surface-variant/60 uppercase tracking-widest mt-0.5">
                   {{ agent?.name || '—' }}
                 </p>
               </div>
-              <button @click="$emit('close')" class="p-2 hover:bg-white/5 rounded-xl transition-colors text-on-surface-variant hover:text-white">
+              <button @click="$emit('close')" class="p-2 hover:bg-surface-container-high rounded-xl transition-colors text-on-surface-variant hover:text-on-surface">
                 <span class="material-symbols-outlined">close</span>
               </button>
             </div>
 
             <div class="flex-1 overflow-y-auto p-7 space-y-6">
-              <!-- Activation -->
               <section>
                 <h3 class="section-title-sm">Activation</h3>
                 <div class="flex items-center gap-3">
@@ -35,12 +33,9 @@
                 </div>
               </section>
 
-              <!-- Webhook -->
               <section class="webhook-section">
                 <h3 class="section-title-sm">External Webhook</h3>
-                <p class="hint">
-                  Use this URL to trigger this agent from any external platform or automation suite.
-                </p>
+                <p class="hint">Use this URL to trigger this agent from any external platform or automation suite.</p>
 
                 <div v-if="webhookUrl" class="webhook-display">
                   <code class="webhook-url">{{ webhookUrl }}</code>
@@ -59,7 +54,6 @@
                 </button>
               </section>
 
-              <!-- Agent meta -->
               <section>
                 <h3 class="section-title-sm">Metadata</h3>
                 <dl class="meta-grid">
@@ -82,10 +76,7 @@ import { ref, computed, watch } from 'vue'
 import { apiFetch } from '@/composables/useApi'
 import { useToastStore } from '@/stores/toast'
 
-const props = defineProps({
-  open: Boolean,
-  agent: { type: Object, default: null },
-})
+const props = defineProps({ open: Boolean, agent: { type: Object, default: null } })
 const emit = defineEmits(['close', 'updated'])
 const toast = useToastStore()
 
@@ -96,13 +87,9 @@ const copied = ref(false)
 const webhookUrl = computed(() => {
   if (!localAgent.value) return ''
   if (localAgent.value.webhook_url) {
-    return localAgent.value.webhook_url.startsWith('http')
-      ? localAgent.value.webhook_url
-      : `${apiUrl}${localAgent.value.webhook_url}`
+    return localAgent.value.webhook_url.startsWith('http') ? localAgent.value.webhook_url : `${apiUrl}${localAgent.value.webhook_url}`
   }
-  if (localAgent.value.webhook_token) {
-    return `${apiUrl}/api/v1/webhook/agent/${localAgent.value.webhook_token}`
-  }
+  if (localAgent.value.webhook_token) return `${apiUrl}/api/v1/webhook/agent/${localAgent.value.webhook_token}`
   return ''
 })
 
@@ -114,8 +101,7 @@ async function generateWebhook() {
     const data = await apiFetch(`/api/v1/agents/${localAgent.value.uuid}/activate`, { method: 'POST' })
     const baseUrl = apiUrl
     localAgent.value = {
-      ...localAgent.value,
-      ...data,
+      ...localAgent.value, ...data,
       webhook_token: data.webhook_token || localAgent.value.webhook_token,
       webhook_url: data.webhook_url
         ? (data.webhook_url.startsWith('http') ? data.webhook_url : `${baseUrl}${data.webhook_url}`)
@@ -124,9 +110,7 @@ async function generateWebhook() {
     }
     emit('updated', localAgent.value)
     toast.show('Webhook URL generated', 'success')
-  } catch (e) {
-    toast.show(e.message, 'error')
-  }
+  } catch (e) { toast.show(e.message, 'error') }
 }
 
 async function copyWebhook() {
@@ -136,9 +120,7 @@ async function copyWebhook() {
     copied.value = true
     toast.show('Webhook URL copied!', 'success')
     setTimeout(() => { copied.value = false }, 2000)
-  } catch (e) {
-    toast.show('Failed to copy', 'error')
-  }
+  } catch (e) { toast.show('Failed to copy', 'error') }
 }
 </script>
 
@@ -148,7 +130,7 @@ async function copyWebhook() {
   font-family: 'JetBrains Mono', monospace;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #c7c4d7;
+  color: var(--color-on-surface-variant);
   margin-bottom: 8px;
 }
 
@@ -165,27 +147,21 @@ async function copyWebhook() {
   letter-spacing: 0.05em;
 }
 
-.status-pill .dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-}
+.status-pill .dot { width: 6px; height: 6px; border-radius: 50%; }
 
 .status-pill.active {
-  background: rgba(74, 222, 128, 0.12);
-  color: #4ade80;
-  border: 1px solid rgba(74, 222, 128, 0.3);
+  background: var(--color-success-container, rgba(74, 222, 128, 0.12));
+  color: var(--color-success);
+  border: 1px solid var(--color-success);
 }
-
-.status-pill.active .dot { background: #4ade80; animation: pulse 2s infinite; }
+.status-pill.active .dot { background: var(--color-success); animation: pulse 2s infinite; }
 
 .status-pill.inactive {
-  background: rgba(144, 143, 160, 0.12);
-  color: #908fa0;
-  border: 1px solid rgba(144, 143, 160, 0.2);
+  background: var(--color-surface-container-high);
+  color: var(--color-outline);
+  border: 1px solid var(--color-outline-variant);
 }
-
-.status-pill.inactive .dot { background: #908fa0; }
+.status-pill.inactive .dot { background: var(--color-outline); }
 
 .btn-secondary-sm {
   display: inline-flex;
@@ -193,51 +169,53 @@ async function copyWebhook() {
   gap: 6px;
   padding: 8px 14px;
   border-radius: 10px;
-  background: rgba(192, 193, 255, 0.08);
-  color: #c0c1ff;
-  border: 1px solid rgba(192, 193, 255, 0.2);
+  background: var(--color-primary-container);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: background 0.15s ease;
   font-family: inherit;
 }
-
-.btn-secondary-sm:hover {
-  background: rgba(192, 193, 255, 0.15);
-}
+.btn-secondary-sm:hover { filter: brightness(1.1); }
 
 .webhook-section {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  background: var(--color-surface-container-low);
+  border: 1px solid var(--color-outline-variant);
   border-radius: 12px;
   padding: 14px;
 }
 
-.hint {
-  font-size: 12px;
-  color: #908fa0;
-  margin-bottom: 10px;
-  line-height: 1.5;
+html.dark .webhook-section {
+  background: rgba(255, 255, 255, 0.02);
+  border-color: rgba(255, 255, 255, 0.06);
 }
+
+.hint { font-size: 12px; color: var(--color-outline); margin-bottom: 10px; line-height: 1.5; }
 
 .webhook-display {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
   border-radius: 8px;
   padding: 8px 10px;
   margin-bottom: 12px;
   overflow: hidden;
 }
 
+html.dark .webhook-display {
+  background: rgba(0, 0, 0, 0.3);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
 .webhook-url {
   flex: 1;
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  color: #c0c1ff;
+  color: var(--color-primary);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -245,44 +223,40 @@ async function copyWebhook() {
 }
 
 .btn-copy {
-  background: rgba(192, 193, 255, 0.1);
-  border: 1px solid rgba(192, 193, 255, 0.2);
-  color: #c0c1ff;
+  background: var(--color-primary-container);
+  border: 1px solid var(--color-primary);
+  color: var(--color-primary);
   border-radius: 6px;
   padding: 4px 6px;
   cursor: pointer;
   flex-shrink: 0;
   transition: background 0.15s ease;
 }
-
-.btn-copy:hover {
-  background: rgba(192, 193, 255, 0.2);
-}
-
-.btn-copy .material-symbols-outlined {
-  font-size: 16px;
-}
+.btn-copy:hover { filter: brightness(1.1); }
+.btn-copy .material-symbols-outlined { font-size: 16px; }
 
 .webhook-payload-hint {
-  background: rgba(0, 0, 0, 0.3);
+  background: var(--color-surface-container);
   border-radius: 6px;
   padding: 8px 10px;
   font-size: 11px;
 }
+
+html.dark .webhook-payload-hint { background: rgba(0, 0, 0, 0.3); }
 
 .hint-label {
   font-family: 'JetBrains Mono', monospace;
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #908fa0;
+  color: var(--color-outline);
   margin-bottom: 4px;
 }
 
 .payload {
   font-family: 'JetBrains Mono', monospace;
   font-size: 11px;
-  color: #d0bcff;
+  color: var(--color-secondary);
   white-space: pre-wrap;
   word-break: break-all;
   margin: 0;
@@ -296,10 +270,15 @@ async function copyWebhook() {
 }
 
 .meta-grid > div {
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--color-surface-container);
   border-radius: 8px;
   padding: 8px 10px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--color-outline-variant);
+}
+
+html.dark .meta-grid > div {
+  background: rgba(255, 255, 255, 0.03);
+  border-color: rgba(255, 255, 255, 0.05);
 }
 
 .meta-grid dt {
@@ -307,19 +286,16 @@ async function copyWebhook() {
   font-size: 9px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #908fa0;
+  color: var(--color-outline);
   margin-bottom: 2px;
 }
 
 .meta-grid dd {
   font-size: 13px;
-  color: #fff;
+  color: var(--color-on-surface);
   margin: 0;
   font-weight: 500;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.4; }
-}
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 </style>

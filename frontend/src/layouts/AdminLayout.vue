@@ -26,6 +26,8 @@
 
       <div class="spacer" />
 
+      <ThemeToggle />
+
       <RouterLink to="/" class="nav-item">
         <span class="material-symbols-outlined">arrow_back</span>
         <span class="nav-label">User App</span>
@@ -46,6 +48,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -61,8 +64,8 @@ function logout() {
   display: flex;
   height: 100vh;
   width: 100vw;
-  background: #0c0e14;
-  color: #e2e2eb;
+  background: var(--color-background);
+  color: var(--color-on-background);
   font-family: 'Inter', sans-serif;
   overflow: hidden;
 }
@@ -70,14 +73,19 @@ function logout() {
 .admin-sidebar {
   width: 240px;
   flex-shrink: 0;
-  background: linear-gradient(180deg, rgba(40, 12, 12, 0.7) 0%, rgba(17, 19, 25, 0.7) 100%);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border-right: 1px solid rgba(255, 180, 171, 0.12);
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-outline-variant);
   padding: 24px 16px;
   display: flex;
   flex-direction: column;
   gap: 4px;
+}
+
+html.dark .admin-sidebar {
+  background: linear-gradient(180deg, rgba(40, 20, 12, 0.7) 0%, rgba(0, 23, 16, 0.7) 100%);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right: 1px solid rgba(255, 180, 171, 0.12);
 }
 
 .admin-logo {
@@ -85,25 +93,25 @@ function logout() {
   align-items: center;
   gap: 12px;
   padding: 4px 12px 24px;
-  color: #ffb4ab;
+  color: var(--color-error);
 }
 
 .admin-logo .material-symbols-outlined {
   font-size: 28px;
-  color: #ff4d4d;
+  color: var(--color-error);
 }
 
 .admin-logo-text {
   font-size: 20px;
   font-weight: 700;
-  color: #fff;
+  color: var(--color-on-surface);
   letter-spacing: -0.01em;
 }
 
 .admin-logo-sub {
   font-family: 'JetBrains Mono', monospace;
   font-size: 9px;
-  color: #ffb4ab;
+  color: var(--color-error);
   text-transform: uppercase;
   letter-spacing: 0.2em;
   margin-top: 2px;
@@ -115,7 +123,7 @@ function logout() {
   gap: 12px;
   padding: 12px 14px;
   border-radius: 12px;
-  color: #c7c4d7;
+  color: var(--color-on-surface-variant);
   text-decoration: none;
   font-size: 14px;
   font-weight: 500;
@@ -129,11 +137,21 @@ function logout() {
 }
 
 .nav-item:hover {
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+}
+
+html.dark .nav-item:hover {
   background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  color: var(--color-on-surface);
 }
 
 .nav-item.active {
+  background: var(--color-error-container);
+  color: var(--color-error);
+}
+
+html.dark .nav-item.active {
   background: rgba(255, 77, 77, 0.12);
   color: #ffb4ab;
 }
@@ -148,10 +166,21 @@ function logout() {
 }
 
 .nav-item.logout {
-  color: rgba(255, 180, 171, 0.7);
+  color: var(--color-error);
+  opacity: 0.7;
 }
 
 .nav-item.logout:hover {
+  background: var(--color-error-container);
+  color: var(--color-error);
+  opacity: 1;
+}
+
+html.dark .nav-item.logout {
+  color: rgba(255, 180, 171, 0.7);
+}
+
+html.dark .nav-item.logout:hover {
   background: rgba(255, 180, 171, 0.08);
   color: #ffb4ab;
 }

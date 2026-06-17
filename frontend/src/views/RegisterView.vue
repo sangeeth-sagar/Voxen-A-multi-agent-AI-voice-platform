@@ -5,15 +5,15 @@
 
     <div class="relative z-10 w-full max-w-sm px-4">
       <div class="flex flex-col items-center mb-10">
-        <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-[0_0_40px_rgba(192,193,255,0.3)] mb-4">
+        <div class="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center shadow-soft mb-4">
           <span class="material-symbols-outlined text-on-primary text-4xl icon-filled">neurology</span>
         </div>
-        <h1 class="font-sans text-3xl font-bold tracking-tight text-white">AgentIQ</h1>
-        <p class="font-mono text-[11px] text-primary/60 uppercase tracking-[0.25em] mt-1">Register New Operator</p>
+        <h1 class="font-sans text-3xl font-bold tracking-tight text-on-surface">AgentIQ</h1>
+        <p class="font-mono text-[11px] text-primary uppercase tracking-[0.25em] mt-1">Register New Operator</p>
       </div>
 
       <div class="glass-panel rounded-3xl p-8">
-        <h2 class="text-xl font-semibold text-white mb-1">Create account</h2>
+        <h2 class="text-xl font-semibold text-on-surface mb-1">Create account</h2>
         <p class="text-sm text-on-surface-variant mb-8">Join the neural intelligence network</p>
 
         <form @submit.prevent="handleRegister" class="space-y-5">
@@ -67,28 +67,14 @@ const loading = ref(false)
 const error = ref('')
 
 async function handleRegister() {
-  loading.value = true
-  error.value = ''
+  loading.value = true; error.value = ''
   try {
-    const data = await apiFetch('/api/v1/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(form.value),
-    })
+    const data = await apiFetch('/api/v1/auth/register', { method: 'POST', body: JSON.stringify(form.value) })
     auth.setAuth(data.access_token, data.user)
-
     if (data.needs_api_key) {
-      toast.show(
-        '👋 Welcome! Add your Gemini API key in Profile → API Keys to activate your voice agent.',
-        'info',
-        8000
-      )
+      toast.show('👋 Welcome! Add your Gemini API key in Profile → API Keys to activate your voice agent.', 'info', 8000)
     }
-
     router.push(data.user?.is_superadmin ? '/admin' : '/')
-  } catch (e) {
-    error.value = e.message
-  } finally {
-    loading.value = false
-  }
+  } catch (e) { error.value = e.message } finally { loading.value = false }
 }
 </script>

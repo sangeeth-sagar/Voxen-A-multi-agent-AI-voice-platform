@@ -1,94 +1,79 @@
 <template>
-  <div class="profile-view">
-    <div class="max-w-3xl mx-auto space-y-6">
+  <div class="profile-view-container h-full overflow-y-auto">
+    <!-- Header Actions -->
+    <header class="settings-header">
+      <div>
+        <h1 class="font-sans text-2xl font-bold text-on-surface tracking-tight">Profile Settings</h1>
+        <p class="text-xs text-on-surface-variant mt-1">Manage your identity, credentials, and API connections.</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <button @click="discardChanges" class="btn-secondary">Discard Changes</button>
+        <button @click="saveConfiguration" :disabled="usernameLoading || pwLoading" class="btn-primary-rect">
+          Save Configuration
+        </button>
+      </div>
+    </header>
 
-      <!-- Profile hero -->
-      <section class="profile-section glass-panel rounded-3xl p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6">
-        <div class="relative">
-          <div class="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary/30 to-secondary-container/50 border border-primary/20 flex items-center justify-center">
-            <span class="material-symbols-outlined text-primary text-5xl icon-filled">person</span>
+    <div class="settings-grid max-w-4xl">
+      <!-- Main Settings Card -->
+      <section class="glass-panel rounded-2xl p-6 space-y-6">
+        <div class="profile-meta-row w-full">
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label class="field-label">Full Identity Label</label>
+              <input v-model="usernameForm.username" type="text" placeholder="e.g. Alexander Vance" class="field-input" />
+            </div>
+            <div>
+              <label class="field-label">System Email</label>
+              <input :value="user?.email" type="email" class="field-input disabled-input" disabled />
+            </div>
           </div>
-        </div>
-
-        <div class="flex-1 text-center sm:text-left">
-          <h1 class="font-sans text-3xl font-bold text-white tracking-tight">
-            {{ user?.username || user?.full_name || '—' }}
-          </h1>
-          <p class="text-on-surface-variant mt-1">{{ user?.email }}</p>
-          <div class="flex items-center gap-2 mt-3 justify-center sm:justify-start flex-wrap">
-            <span :class="[
-              'px-3 py-1 rounded-full font-mono text-[10px] uppercase tracking-wider font-bold',
-              user?.is_superadmin
-                ? 'bg-error/15 text-error border border-error/30'
-                : 'bg-primary/10 text-primary border border-primary/20'
-            ]">
-              {{ user?.is_superadmin ? 'superadmin' : (user?.role || 'user') }}
-            </span>
-            <span :class="['px-3 py-1 rounded-full font-mono text-[10px] uppercase tracking-wider',
-              user?.is_active ? 'bg-green-900/30 text-green-400 border border-green-500/20' : 'bg-error/10 text-error border border-error/20'
-            ]">
-              {{ user?.is_active ? 'Active' : 'Suspended' }}
-            </span>
-          </div>
-          <p class="font-mono text-[11px] text-on-surface-variant/40 mt-2 uppercase tracking-widest">
-            Member since {{ joinDate }}
-          </p>
         </div>
       </section>
 
-      <!-- Change Username -->
-      <section class="glass-panel rounded-2xl p-7">
-        <h2 class="font-sans font-semibold text-lg text-white mb-5">Change Username</h2>
-        <form @submit.prevent="updateUsername" class="space-y-4">
-          <div>
-            <label class="field-label">New Username</label>
-            <input v-model="usernameForm.username" type="text" placeholder="your_new_handle" class="field-input" />
-          </div>
-          <p v-if="usernameError" class="text-error text-sm">{{ usernameError }}</p>
-          <button type="submit" :disabled="usernameLoading" class="btn-primary px-6 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
-            <span v-if="usernameLoading" class="material-symbols-outlined text-sm animate-spin">refresh</span>
-            Save Username
-          </button>
-        </form>
-      </section>
-
-      <!-- Change Password -->
-      <section class="glass-panel rounded-2xl p-7">
-        <h2 class="font-sans font-semibold text-lg text-white mb-5">Change Password</h2>
-        <form @submit.prevent="changePassword" class="space-y-4">
+      <!-- Credentials change card -->
+      <section class="glass-panel rounded-2xl p-6 space-y-4">
+        <h2 class="section-title">
+          <span class="material-symbols-outlined text-primary">security</span>
+          Update Credentials
+        </h2>
+        
+        <form @submit.prevent="changePassword" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
           <div>
             <label class="field-label">Current Password</label>
-            <input v-model="pwForm.current_password" type="password" placeholder="••••••••" class="field-input" />
+            <input v-model="pwForm.current_password" type="password" placeholder="••••••••" class="field-input text-xs" />
           </div>
           <div>
             <label class="field-label">New Password</label>
-            <input v-model="pwForm.new_password" type="password" placeholder="min. 8 characters" class="field-input" />
+            <input v-model="pwForm.new_password" type="password" placeholder="min. 8 chars" class="field-input text-xs" />
           </div>
-          <div>
-            <label class="field-label">Confirm Password</label>
-            <input v-model="pwForm.confirm_password" type="password" placeholder="repeat new password" class="field-input" />
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="field-label">Confirm Password</label>
+              <input v-model="pwForm.confirm_password" type="password" placeholder="repeat password" class="field-input text-xs" />
+            </div>
+            <button type="submit" :disabled="pwLoading" class="btn-primary-rect h-[38px] px-4 font-semibold text-xs whitespace-nowrap flex items-center gap-1">
+              <span v-if="pwLoading" class="material-symbols-outlined text-xs animate-spin">refresh</span>
+              Update
+            </button>
           </div>
-          <p v-if="pwError" class="text-error text-sm">{{ pwError }}</p>
-          <button type="submit" :disabled="pwLoading" class="btn-primary px-6 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2 disabled:opacity-50">
-            <span v-if="pwLoading" class="material-symbols-outlined text-sm animate-spin">refresh</span>
-            Update Password
-          </button>
         </form>
+        <p v-if="pwError" class="text-error text-xs mt-2 font-mono">{{ pwError }}</p>
       </section>
 
-      <!-- API KEYS -->
-      <section class="api-keys-section glass-panel rounded-2xl p-7">
-        <h2 class="section-title">
-          <span class="material-symbols-outlined">key</span>
-          API Keys
-        </h2>
-        <p class="section-desc">
-          Add your own API keys. These will be available when creating voice agents.
-        </p>
+      <!-- External Provider API Keys Section (Functional App Logic) -->
+      <section class="glass-panel rounded-2xl p-6 space-y-6">
+        <div>
+          <h2 class="section-title">
+            <span class="material-symbols-outlined text-primary">key</span>
+            Provider Integration Keys
+          </h2>
+          <p class="text-[11px] text-on-surface-variant mt-1">Configure individual API keys to enable LLM providers and voice synthesis engines.</p>
+        </div>
 
-        <!-- Add new key form -->
-        <div class="add-key-form">
-          <select v-model="newKey.provider" class="input">
+        <!-- Add Key Form -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-2 bg-surface-container/60 p-3 rounded-xl border border-outline-variant/40">
+          <select v-model="newKey.provider" class="field-input text-xs">
             <optgroup label="LLM Providers">
               <option value="gemini">Google Gemini</option>
               <option value="openai">OpenAI</option>
@@ -101,48 +86,44 @@
               <option value="azure_tts">Azure TTS</option>
             </optgroup>
           </select>
-
-          <input v-model="newKey.label" placeholder="Label (e.g. My Gemini Key)" class="input" />
-          <input v-model="newKey.api_key" type="password" placeholder="Paste API key..." class="input" />
-          <button @click="addKey" :disabled="adding" class="btn-primary add-btn">
-            <span v-if="adding" class="material-symbols-outlined text-sm animate-spin">refresh</span>
-            <span v-else class="material-symbols-outlined text-sm">add</span>
+          <input v-model="newKey.label" placeholder="Label (e.g. Gemini Key)" class="field-input text-xs" />
+          <input v-model="newKey.api_key" type="password" placeholder="Paste API key..." class="field-input text-xs" />
+          <button @click="addKey" :disabled="adding" class="btn-primary-rect h-[38px] w-full flex items-center justify-center gap-1 font-semibold text-xs">
+            <span v-if="adding" class="material-symbols-outlined text-xs animate-spin">refresh</span>
+            <span v-else class="material-symbols-outlined text-xs">add</span>
             {{ adding ? 'Adding…' : 'Add Key' }}
           </button>
         </div>
+        <p v-if="keyError" class="text-error text-xs font-mono">{{ keyError }}</p>
 
-        <p v-if="keyError" class="text-error text-sm mt-3">{{ keyError }}</p>
-
-        <!-- Existing keys list -->
-        <div class="keys-list">
-          <div v-if="loadingKeys" class="loading-row">
-            <span class="material-symbols-outlined text-2xl text-primary/40 animate-spin">refresh</span>
-            <span class="font-mono text-xs text-on-surface-variant/50 uppercase">Loading keys…</span>
+        <!-- Keys List -->
+        <div class="keys-list space-y-2">
+          <div v-if="loadingKeys" class="flex items-center justify-center py-6 gap-2">
+            <span class="material-symbols-outlined text-primary animate-spin">refresh</span>
+            <span class="font-mono text-xs text-on-surface-variant">Syncing provider keys…</span>
           </div>
           <template v-else>
-            <div v-for="key in apiKeys" :key="key.id" class="key-card">
-              <div class="key-info">
-                <span class="provider-badge" :class="key.provider">
-                  {{ providerLabel(key.provider) }}
-                </span>
-                <span class="key-label">{{ key.label }}</span>
-                <span class="key-preview font-mono">{{ key.key_preview || '••••••••' }}</span>
+            <div v-for="key in apiKeys" :key="key.id" class="key-item flex items-center justify-between p-3 bg-surface-container rounded-xl border border-outline-variant/50">
+              <div class="flex items-center gap-3">
+                <span class="provider-badge" :class="key.provider">{{ providerLabel(key.provider) }}</span>
+                <span class="text-xs font-semibold">{{ key.label }}</span>
+                <span class="text-[10px] font-mono text-on-surface-variant/70">{{ key.key_preview || '••••••••' }}</span>
               </div>
-              <span class="key-usage-hint">
-                Used by {{ agentCountForKey(key.id) }} agent(s)
-              </span>
-              <button @click="deleteKey(key.id)" class="btn-danger-sm" title="Delete key">
-                <span class="material-symbols-outlined">delete</span>
-              </button>
+              <div class="flex items-center gap-3">
+                <span class="text-[9px] font-mono text-on-surface-variant bg-surface-container-high px-2 py-0.5 rounded border border-outline-variant">
+                  {{ agentCountForKey(key.id) }} active agent(s)
+                </span>
+                <button @click="deleteKey(key.id)" class="text-error hover:text-red-400 p-1 flex items-center" title="Delete key">
+                  <span class="material-symbols-outlined text-base">delete</span>
+                </button>
+              </div>
             </div>
-            <div v-if="apiKeys.length === 0" class="empty-state">
-              <span class="material-symbols-outlined text-3xl mb-2 block opacity-40">vpn_key</span>
-              No API keys added yet. Add one above to use custom providers.
+            <div v-if="apiKeys.length === 0" class="text-center py-6 text-on-surface-variant text-xs italic">
+              No custom keys configured. Add keys above to use custom integrations.
             </div>
           </template>
         </div>
       </section>
-
     </div>
   </div>
 </template>
@@ -153,55 +134,59 @@ import { useAuthStore } from '@/stores/auth'
 import { useApiKeys } from '@/composables/useApiKeys'
 import { apiFetch } from '@/composables/useApi'
 import { useToastStore } from '@/stores/toast'
-
 const auth = useAuthStore()
 const toast = useToastStore()
 const user = computed(() => auth.user)
-
 const { apiKeys, fetchKeys, addApiKey, deleteApiKey } = useApiKeys()
 
-const joinDate = computed(() => {
-  if (!user.value?.created_at) return '—'
-  return new Date(user.value.created_at).toLocaleDateString('en-US', { year: 'numeric', month: 'long' })
-})
-
-// Username form
+// Form references
 const usernameForm = ref({ username: user.value?.username || '' })
 const usernameLoading = ref(false)
-const usernameError = ref('')
 
-async function updateUsername() {
-  usernameLoading.value = true; usernameError.value = ''
+const pwForm = ref({ current_password: '', new_password: '', confirm_password: '' })
+const pwLoading = ref(false)
+const pwError = ref('')
+
+// Discard changes resets forms back to state
+function discardChanges() {
+  usernameForm.value.username = user.value?.username || ''
+  pwForm.value = { current_password: '', new_password: '', confirm_password: '' }
+  toast.show('Changes discarded', 'info')
+}
+
+// Save config saves local items and updates username on API
+async function saveConfiguration() {
+  usernameLoading.value = true
   try {
     const data = await apiFetch('/api/v1/auth/me', {
       method: 'PUT',
-      body: JSON.stringify(usernameForm.value),
+      body: JSON.stringify(usernameForm.value)
     })
     auth.setAuth(auth.token, data)
-    toast.show('Username updated', 'success')
+    toast.show('Configuration saved successfully', 'success')
   } catch (e) {
-    usernameError.value = e.message
+    toast.show(e.message || 'Failed to update username', 'error')
   } finally {
     usernameLoading.value = false
   }
 }
 
-// Password form
-const pwForm = ref({ current_password: '', new_password: '', confirm_password: '' })
-const pwLoading = ref(false)
-const pwError = ref('')
-
 async function changePassword() {
   if (pwForm.value.new_password !== pwForm.value.confirm_password) {
-    pwError.value = 'Passwords do not match'; return
+    pwError.value = 'Passwords do not match'
+    return
   }
-  pwLoading.value = true; pwError.value = ''
+  pwLoading.value = true
+  pwError.value = ''
   try {
     await apiFetch('/api/v1/auth/change-password', {
       method: 'POST',
-      body: JSON.stringify({ current_password: pwForm.value.current_password, new_password: pwForm.value.new_password }),
+      body: JSON.stringify({
+        current_password: pwForm.value.current_password,
+        new_password: pwForm.value.new_password
+      })
     })
-    toast.show('Password changed successfully', 'success')
+    toast.show('Password updated successfully', 'success')
     pwForm.value = { current_password: '', new_password: '', confirm_password: '' }
   } catch (e) {
     pwError.value = e.message
@@ -210,7 +195,7 @@ async function changePassword() {
   }
 }
 
-// API Keys
+// Keys management
 const newKey = ref({ provider: 'gemini', label: '', api_key: '' })
 const adding = ref(false)
 const keyError = ref('')
@@ -218,9 +203,7 @@ const loadingKeys = ref(false)
 const agents = ref([])
 
 function agentCountForKey(keyId) {
-  return agents.value.filter(
-    a => a.llm_key_id === keyId || a.tts_key_id === keyId
-  ).length
+  return agents.value.filter(a => a.llm_key_id === keyId || a.tts_key_id === keyId).length
 }
 
 async function addKey() {
@@ -254,10 +237,19 @@ async function deleteKey(id) {
 }
 
 const PROVIDER_LABELS = {
-  gemini: 'Gemini', openai: 'OpenAI', claude: 'Claude',
-  elevenlabs: 'ElevenLabs', groq: 'Groq', deepgram: 'Deepgram', azure_tts: 'Azure TTS'
+  gemini: 'Gemini',
+  openai: 'OpenAI',
+  claude: 'Claude',
+  elevenlabs: 'ElevenLabs',
+  groq: 'Groq',
+  deepgram: 'Deepgram',
+  azure_tts: 'Azure TTS'
 }
-function providerLabel(p) { return PROVIDER_LABELS[p] || p }
+function providerLabel(p) {
+  return PROVIDER_LABELS[p] || p
+}
+
+
 
 onMounted(async () => {
   loadingKeys.value = true
@@ -273,197 +265,226 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.profile-view {
+.profile-view-container {
   padding: 24px;
-  min-height: 100%;
 }
 
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.settings-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* Form Styles */
 .field-label {
   display: block;
   font-family: 'JetBrains Mono', monospace;
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 0.1em;
-  color: #c7c4d7;
+  color: var(--color-outline);
   margin-bottom: 6px;
+  font-weight: 700;
 }
 
-.field-input,
-.input {
+.field-input {
   width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--color-surface-container);
+  border: 1px solid var(--color-outline-variant);
   border-radius: 12px;
   padding: 10px 14px;
-  font-size: 14px;
-  color: #e2e2eb;
+  font-size: 13px;
+  color: var(--color-on-surface);
   outline: none;
-  transition: border-color 0.15s ease;
+  transition: all 0.2s ease;
   font-family: inherit;
 }
 
-.field-input:focus,
-.input:focus {
-  border-color: rgba(192, 193, 255, 0.4);
+html.dark .field-input {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(255, 255, 255, 0.08);
 }
+
+.field-input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 8px rgba(14, 108, 74, 0.15);
+}
+
+html.dark .field-input:focus {
+  border-color: #a5d1aa;
+  box-shadow: 0 0 8px rgba(165, 209, 170, 0.15);
+}
+
+.disabled-input {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Avatar edit styling */
+.avatar-wrapper {
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.avatar-box {
+  background: var(--color-surface-container-high);
+}
+
+.camera-btn {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  border: 2px solid var(--color-surface);
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: var(--shadow-level-1);
+  transition: all 0.15s ease;
+}
+
+.camera-btn:hover {
+  transform: scale(1.1);
+}
+
+/* Badges */
+.badge-operator {
+  display: inline-flex;
+  align-items: center;
+  background: rgba(14, 108, 74, 0.12);
+  color: var(--color-success);
+  border: 1px solid rgba(14, 108, 74, 0.25);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 99px;
+  letter-spacing: 0.02em;
+}
+
+html.dark .badge-operator {
+  background: rgba(165, 209, 170, 0.12);
+  color: #a5d1aa;
+  border-color: rgba(165, 209, 170, 0.25);
+}
+
+.badge-access {
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+  border: 1px solid var(--color-outline-variant);
+  font-size: 10px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+  padding: 4px 10px;
+  border-radius: 99px;
+}
+
+html.dark .badge-access {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* Buttons */
+.btn-primary-rect {
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 10px;
+  border: none;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-primary-rect:hover {
+  filter: brightness(1.15);
+}
+
+.btn-primary-rect:active {
+  transform: scale(0.98);
+}
+
+html.dark .btn-primary-rect {
+  background: #0d3c2f;
+  color: #a5d1aa;
+  border: 1px solid rgba(165, 209, 170, 0.2);
+}
+
+html.dark .btn-primary-rect:hover {
+  background: #134e3e;
+  box-shadow: 0 0 10px rgba(165, 209, 170, 0.25);
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--color-on-surface-variant);
+  border: 1px solid var(--color-outline-variant);
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: 10px;
+  padding: 10px 18px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--color-surface-container-high);
+  color: var(--color-on-surface);
+}
+
+html.dark .btn-secondary {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+html.dark .btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Custom provider integration key badges */
+.provider-badge {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--color-primary-container);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+}
+
+.provider-badge.gemini { background: rgba(66, 133, 244, 0.12); color: #4d8af0; border-color: rgba(66, 133, 244, 0.3); }
+.provider-badge.openai { background: rgba(16, 163, 127, 0.12); color: #10a37f; border-color: rgba(16, 163, 127, 0.3); }
+.provider-badge.claude { background: rgba(204, 119, 34, 0.12); color: #cc7722; border-color: rgba(204, 119, 34, 0.3); }
+.provider-badge.elevenlabs { background: rgba(109, 151, 115, 0.12); color: var(--color-secondary); border-color: rgba(14, 108, 74, 0.3); }
+.provider-badge.groq { background: rgba(251, 146, 60, 0.12); color: #fb923c; border-color: rgba(251, 146, 60, 0.3); }
+.provider-badge.deepgram { background: rgba(56, 189, 248, 0.12); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); }
+.provider-badge.azure_tts { background: rgba(99, 102, 241, 0.12); color: #818cf8; border-color: rgba(99, 102, 241, 0.3); }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 18px;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 6px;
-}
-
-.section-title .material-symbols-outlined {
-  color: #c0c1ff;
-  font-size: 22px;
-}
-
-.section-desc {
-  font-size: 13px;
-  color: #c7c4d7;
-  margin-bottom: 18px;
-}
-
-.add-key-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1.5fr auto;
-  gap: 8px;
-  margin-bottom: 18px;
-}
-
-.add-key-form .input,
-.add-key-form .btn-primary {
-  min-width: 0;
-}
-
-.add-key-form .add-btn {
-  white-space: nowrap;
-  padding: 0 16px;
-  height: 42px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-@media (max-width: 720px) {
-  .add-key-form { grid-template-columns: 1fr; }
-}
-
-.keys-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.key-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-}
-
-.key-usage-hint {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #908fa0;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  padding: 4px 8px;
-  border-radius: 6px;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.key-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
-}
-
-.provider-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba(192, 193, 255, 0.1);
-  color: #c0c1ff;
-  border: 1px solid rgba(192, 193, 255, 0.2);
-  flex-shrink: 0;
-}
-
-.provider-badge.gemini      { background: rgba(66, 133, 244, 0.12); color: #4d8af0; border-color: rgba(66, 133, 244, 0.3); }
-.provider-badge.openai      { background: rgba(16, 163, 127, 0.12); color: #10a37f; border-color: rgba(16, 163, 127, 0.3); }
-.provider-badge.claude      { background: rgba(204, 119, 34, 0.12); color: #cc7722; border-color: rgba(204, 119, 34, 0.3); }
-.provider-badge.elevenlabs  { background: rgba(192, 193, 255, 0.12); color: #d0bcff; border-color: rgba(208, 188, 255, 0.3); }
-.provider-badge.groq        { background: rgba(251, 146, 60, 0.12); color: #fb923c; border-color: rgba(251, 146, 60, 0.3); }
-.provider-badge.deepgram    { background: rgba(56, 189, 248, 0.12); color: #38bdf8; border-color: rgba(56, 189, 248, 0.3); }
-.provider-badge.azure_tts   { background: rgba(99, 102, 241, 0.12); color: #818cf8; border-color: rgba(99, 102, 241, 0.3); }
-
-.key-label {
-  font-size: 14px;
-  font-weight: 500;
-  color: #fff;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.key-preview {
-  font-size: 11px;
-  color: #908fa0;
-  margin-left: auto;
-  padding-left: 12px;
-  flex-shrink: 0;
-}
-
-.btn-danger-sm {
-  background: rgba(255, 180, 171, 0.1);
-  color: #ffb4ab;
-  border: 1px solid rgba(255, 180, 171, 0.2);
-  border-radius: 8px;
-  padding: 6px 8px;
-  cursor: pointer;
-  transition: background 0.15s ease;
-}
-
-.btn-danger-sm:hover {
-  background: rgba(255, 180, 171, 0.2);
-}
-
-.btn-danger-sm .material-symbols-outlined {
-  font-size: 18px;
-}
-
-.empty-state {
-  padding: 32px 20px;
-  text-align: center;
-  color: #908fa0;
-  font-size: 13px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 12px;
-  border: 1px dashed rgba(255, 255, 255, 0.08);
-}
-
-.loading-row {
-  display: flex;
-  align-items: center;
   gap: 10px;
-  padding: 20px;
-  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--color-on-surface);
 }
 </style>
