@@ -11,12 +11,24 @@ class Settings(BaseSettings):
 
     @field_validator("cors_origins", mode="before")
     @classmethod
+@field_validator("cors_origins", mode="before")
+    @classmethod
     def assemble_cors_origins(cls, v: str | List[str]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
-        elif isinstance(v, (list, str)):
+        # If it's already a list, return it
+        if isinstance(v, list):
             return v
-        return v
+        # If it's a string, handle JSON or comma-separated
+        if isinstance(v, str):
+            # If it's a JSON string (starts with [), try to parse it
+            if v.startswith("["):
+                import json
+                try:
+                    return json.loads(v)
+                except json.JSONDecodeError:
+                    return [v] # Fallback if parsing fails
+            # Otherwise, split by comma
+            return [i.strip() for i in v.split(",") if i.strip()]
+        return ["http://localhost:5173", "http://localhost:3000"]
 
     # Database configuration
     database_url: str = "postgresql://postgres:postgres@localhost:5432/agentiq"
