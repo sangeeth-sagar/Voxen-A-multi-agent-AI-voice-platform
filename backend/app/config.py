@@ -1,32 +1,21 @@
-from pydantic import Field, field_validator
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import List
+from typing import List, Union
 
 class Settings(BaseSettings):
     app_name: str = "AgentIQ"
     app_version: str = "2.4.0"
     
-    # Updated to handle comma-separated strings from environment variables
+    # Defaults for local development
     cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
 
+    # Validator to safely parse Render environment variables into a Python list
     @field_validator("cors_origins", mode="before")
     @classmethod
-@field_validator("cors_origins", mode="before")
-    @classmethod
-    def assemble_cors_origins(cls, v: str | List[str]) -> List[str]:
-        # If it's already a list, return it
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, list):
             return v
-        # If it's a string, handle JSON or comma-separated
         if isinstance(v, str):
-            # If it's a JSON string (starts with [), try to parse it
-            if v.startswith("["):
-                import json
-                try:
-                    return json.loads(v)
-                except json.JSONDecodeError:
-                    return [v] # Fallback if parsing fails
-            # Otherwise, split by comma
             return [i.strip() for i in v.split(",") if i.strip()]
         return ["http://localhost:5173", "http://localhost:3000"]
 
@@ -86,7 +75,7 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 500
 
-    # Use SettingsConfigDict for Pydantic v2
+    # Settings Configuration (must be inside the class)
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
