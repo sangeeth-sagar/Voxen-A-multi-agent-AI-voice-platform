@@ -15,7 +15,6 @@ class AgentConfigCreate(BaseModel):
     is_voice_agent: bool = False
     voice_language: str = "en-US"
     voice_system_prompt: Optional[str] = None
-    knowledge_base_text: Optional[str] = None
     # New fields
     wake_word: str = "Nova"
     kb_enabled: bool = False
@@ -41,7 +40,6 @@ class AgentConfigUpdate(BaseModel):
     is_voice_agent: Optional[bool] = None
     voice_language: Optional[str] = None
     voice_system_prompt: Optional[str] = None
-    knowledge_base_text: Optional[str] = None
     # New fields
     wake_word: Optional[str] = None
     kb_enabled: Optional[bool] = None
@@ -75,7 +73,6 @@ class AgentConfigResponse(BaseModel):
     is_voice_agent: bool
     voice_language: str
     voice_system_prompt: Optional[str]
-    knowledge_base_text: Optional[str]
     # New fields
     wake_word: str
     is_active: bool

@@ -30,7 +30,6 @@ class AgentConfig(Base):
     is_voice_agent       = Column(Boolean, default=False)
     voice_language       = Column(String, default="en-US")
     voice_system_prompt  = Column(Text, nullable=True)
-    knowledge_base_text  = Column(Text, nullable=True)
     # Wake word / activation
     wake_word            = Column(String, nullable=False, default="Nova")
     is_active            = Column(Boolean, default=False)

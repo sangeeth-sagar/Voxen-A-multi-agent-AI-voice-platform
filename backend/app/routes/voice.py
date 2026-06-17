@@ -20,6 +20,7 @@ from app.models.agent_config import AgentConfig
 from app.models.agent_key_assignment import AgentApiKeyAssignment
 from app.models.user_api_key import UserApiKey
 from app.models.user import User
+from app.services.rag import get_chroma_client, get_embedding_function
 from app.utils.encryption import decrypt_key
 
 router = APIRouter()
@@ -121,16 +122,32 @@ async def voice_chat(
         system_prompt = agent.voice_system_prompt or DEFAULT_VOICE_PROMPT
         agent_name = agent.name
 
-        # If agent has knowledge base, append it to system prompt
-        if agent.knowledge_base_text:
-            system_prompt += f"""
+        # If agent has a ChromaDB knowledge base collection, retrieve
+        # relevant chunks and append them to the system prompt.
+        if agent.kb_collection_name:
+            try:
+                client = get_chroma_client()
+                collection = client.get_collection(
+                    agent.kb_collection_name,
+                    embedding_function=get_embedding_function(),
+                )
+                results = collection.query(
+                    query_texts=[body.text],
+                    n_results=3,
+                )
+                retrieved_chunks = results.get("documents", [[]])[0]
+                if retrieved_chunks:
+                    kb_context = "\n\n".join(retrieved_chunks)
+                    system_prompt += f"""
 
-You also have access to the following knowledge base.
-Use it to answer relevant questions:
+You have access to the following relevant knowledge base excerpts.
+Use them to answer if relevant:
 
 --- KNOWLEDGE BASE ---
-{agent.knowledge_base_text[:8000]}
+{kb_context}
 --- END KNOWLEDGE BASE ---"""
+            except Exception:
+                pass  # No KB collection yet, or collection not found -- continue without it
 
     # Load the user's API key for this agent
     if agent is None:
