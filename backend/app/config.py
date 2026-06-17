@@ -6,16 +6,19 @@ class Settings(BaseSettings):
     app_name: str = "AgentIQ"
     app_version: str = "2.4.0"
     
-    # Defaults for local development
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # Changed type hint to Union to prevent Pydantic from forcing strict JSON parsing on startup
+    cors_origins: Union[List[str], str] = ["http://localhost:5173", "http://localhost:3000"]
 
-    # Validator to safely parse Render environment variables into a Python list
     @field_validator("cors_origins", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, list):
             return v
         if isinstance(v, str):
+            # If it's an empty string or just whitespace, return defaults
+            if not v.strip():
+                return ["http://localhost:5173", "http://localhost:3000"]
+            # Safely split comma-separated URLs
             return [i.strip() for i in v.split(",") if i.strip()]
         return ["http://localhost:5173", "http://localhost:3000"]
 
@@ -75,7 +78,6 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 500
 
-    # Settings Configuration (must be inside the class)
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -85,4 +87,4 @@ class Settings(BaseSettings):
 def get_settings():
     return Settings()
 
-settings = get_settings()
+settings = get_settings()corc
