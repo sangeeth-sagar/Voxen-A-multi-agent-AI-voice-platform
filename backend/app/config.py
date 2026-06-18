@@ -1,12 +1,28 @@
-from pydantic_settings import BaseSettings
-from typing import List
-import secrets
-
+from typing import List, Union
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "AgentIQ"
     app_version: str = "2.4.0"
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    
+    # The Union type tells Pydantic not to crash if Render passes a plain string
+    cors_origins: Union[List[str], str] = ["http://localhost:5173", "http://localhost:3000"]
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
+        # If it's already a list (like from our defaults), keep it
+        if isinstance(v, list):
+            return v
+        # If it's a string from the Render environment variable
+        if isinstance(v, str):
+            # If the string is empty, fallback to defaults safely
+            if not v.strip():
+                return ["http://localhost:5173", "http://localhost:3000"]
+            # Split the comma-separated URLs into a proper Python list
+            return [i.strip() for i in v.split(",") if i.strip()]
+        return ["http://localhost:5173", "http://localhost:3000"]
 
     # Database configuration
     database_url: str = "postgresql://postgres:postgres@localhost:5432/agentiq"
@@ -64,16 +80,14 @@ class Settings(BaseSettings):
     rate_limit_per_minute: int = 60
     rate_limit_per_hour: int = 500
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        case_sensitive = False
-
+    # Pydantic Settings Configuration
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore"  # Ignores any unrelated environment variables safely
+    )
 
 def get_settings():
     return Settings()
 
-
-# Backwards-compat: many call sites used `settings` (lowercase module attribute).
-# Keep both names available.
 settings = get_settings()
