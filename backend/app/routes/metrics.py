@@ -47,7 +47,7 @@ def _verify_agent_owner(agent_uuid: str, user: User, db: Session):
 @router.get("/{agent_uuid}/volume")
 def volume(
     agent_uuid: str,
-    range: str = Query("30d", regex="^(7d|30d|90d)$"),
+    range: str = Query("30d", pattern="^(7d|30d|90d)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -58,7 +58,7 @@ def volume(
 @router.get("/{agent_uuid}/performance")
 def performance(
     agent_uuid: str,
-    range: str = Query("30d", regex="^(7d|30d|90d)$"),
+    range: str = Query("30d", pattern="^(7d|30d|90d)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -69,7 +69,7 @@ def performance(
 @router.get("/{agent_uuid}/financial")
 def financial(
     agent_uuid: str,
-    range: str = Query("30d", regex="^(7d|30d|90d)$"),
+    range: str = Query("30d", pattern="^(7d|30d|90d)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -85,7 +85,7 @@ def financial(
 @router.get("/{agent_uuid}/reliability")
 def reliability(
     agent_uuid: str,
-    range: str = Query("30d", regex="^(7d|30d|90d)$"),
+    range: str = Query("30d", pattern="^(7d|30d|90d)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -95,7 +95,7 @@ def reliability(
 
 @router.get("/platform")
 def platform(
-    range: str = Query("30d", regex="^(7d|30d|90d)$"),
+    range: str = Query("30d", pattern="^(7d|30d|90d)$"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
