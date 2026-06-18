@@ -11,7 +11,18 @@ from app.routes.ws_voice import router as ws_router
 from app.routes.webhooks import router as webhook_router
 from app.routes.metrics import router as metrics_router
 from app.routes.voice_process import router as voice_process_router
-from app.config import settings  # Optimized import
+from app.config import settings
+
+# =====================================================================
+# THE DATABASE FIX: Tell SQLAlchemy to build the tables in Supabase
+# =====================================================================
+from app.database import engine, Base
+# Ensure your models are loaded so SQLAlchemy knows what tables to build
+# (If your models are in a different folder, adjust this import to match)
+import app.models 
+
+Base.metadata.create_all(bind=engine)
+# =====================================================================
 
 app = FastAPI(
     title=settings.app_name,
