@@ -1,5 +1,7 @@
 <template>
-  <RouterView />
+  <main>
+    <RouterView />
+  </main>
   <ToastContainer />
 </template>
 

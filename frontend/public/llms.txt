@@ -1,0 +1,9 @@
+# AgentIQ Neural OS
+
+AgentIQ is a multi-agent AI voice platform that lets users create, configure, and deploy custom voice assistants powered by their own LLM API keys (Gemini, OpenAI, Claude). Features include real-time voice conversations via WebSocket, knowledge-base-backed agents, webhook integrations, and usage analytics.
+
+## Key pages
+
+- [Login](/login) — Sign in to your account
+- [Register](/register) — Create a new account
+- [Voice Lab](/) — Build and test voice agents

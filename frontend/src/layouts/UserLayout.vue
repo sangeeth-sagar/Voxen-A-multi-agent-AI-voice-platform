@@ -113,11 +113,13 @@ import { useToastStore } from '@/stores/toast'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
 import NotificationPanel from '@/components/NotificationPanel.vue'
 import { useNotifications } from '@/composables/useNotifications'
+import { useSessionTimer } from '@/composables/useSessionTimer'
 
 const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const toast = useToastStore()
+const { stopSessionTracking } = useSessionTimer()
 
 const user = computed(() => auth.user)
 
@@ -136,6 +138,7 @@ const searchPlaceholder = computed(() => {
 })
 
 function logout() {
+  stopSessionTracking()
   auth.logout()
   router.push('/login')
 }

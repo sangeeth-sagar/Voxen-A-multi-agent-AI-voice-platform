@@ -39,7 +39,9 @@
               <input v-model="form.password" :type="showPassword ? 'text' : 'password'" required
                 placeholder="••••••••" class="w-full tactical-input rounded-lg px-4 py-3 text-sm pr-12" />
               <button type="button" @click="showPassword = !showPassword"
-                class="absolute right-3 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface">
+                class="absolute right-2 top-1/2 -translate-y-1/2 text-on-surface-variant hover:text-on-surface p-2.5 -m-1 rounded-full flex items-center justify-center"
+                style="min-width: 44px; min-height: 44px;"
+                aria-label="Toggle password visibility">
                 <span class="material-symbols-outlined text-lg">
                   {{ showPassword ? 'visibility_off' : 'visibility' }}
                 </span>

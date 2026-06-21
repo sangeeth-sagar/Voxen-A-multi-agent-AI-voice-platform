@@ -49,11 +49,14 @@
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import { useSessionTimer } from '@/composables/useSessionTimer'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { stopSessionTracking } = useSessionTimer()
 
 function logout() {
+  stopSessionTracking()
   auth.logout()
   router.push('/login')
 }
