@@ -62,6 +62,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { apiFetch } from '@/composables/useApi'
 
 const props = defineProps({ agentId: String })
 
@@ -101,8 +102,7 @@ function statusClass(code) {
 async function fetchLogs() {
   loading.value = true
   try {
-    const res = await fetch(`/api/v1/metrics/${props.agentId}/logs?limit=${limit.value}`)
-    if (res.ok) logs.value = await res.json()
+    logs.value = await apiFetch(`/api/v1/metrics/${props.agentId}/logs?limit=${limit.value}`)
   } catch (e) { console.error('Logs fetch error', e) } finally { loading.value = false }
 }
 

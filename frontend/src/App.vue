@@ -4,18 +4,29 @@
 </template>
 
 <script setup>
-import { RouterView } from 'vue-router'
-import { onMounted } from 'vue'
+import { RouterView, useRoute } from 'vue-router'
+import { onMounted, watch } from 'vue'
 import { useLanguage } from '@/composables/useLanguage'
-import { useThemeStore } from '@/stores/theme'
+import { useAuthStore } from '@/stores/auth'
+import { useSessionTimer } from '@/composables/useSessionTimer'
+import { initThemeOnLoad } from '@/composables/useTheme'
 import ToastContainer from '@/components/ui/ToastContainer.vue'
 
+const route = useRoute()
 const { setLanguage, detectVoiceStatus } = useLanguage()
-const themeStore = useThemeStore()
+const auth = useAuthStore()
+const { startSessionTracking } = useSessionTimer()
+
+// Synchronize theme on route changes (auth vs app routes)
+watch(
+  () => route.path,
+  (newPath) => {
+    initThemeOnLoad(newPath)
+  }
+)
 
 onMounted(() => {
-  // Initialize theme
-  themeStore.applyTheme()
+  initThemeOnLoad(route.path)
 
   const saved = localStorage.getItem('agentiq_language')
   if (saved) setLanguage(saved)
@@ -23,6 +34,10 @@ onMounted(() => {
   if (typeof window !== 'undefined' && 'speechSynthesis' in window) {
     detectVoiceStatus()
     window.speechSynthesis.addEventListener?.('voiceschanged', detectVoiceStatus)
+  }
+
+  if (auth.isLoggedIn) {
+    startSessionTracking()
   }
 })
 </script>

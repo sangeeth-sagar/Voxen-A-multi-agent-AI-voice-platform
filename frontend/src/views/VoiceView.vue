@@ -66,12 +66,11 @@
 
         <!-- 3D Glowing Green Neural Core Orb -->
         <div class="orb-container relative my-2 flex items-center justify-center h-48 w-48 shrink-0">
-          <!-- Outer Pulsing Energy Rings -->
-          <div class="absolute w-72 h-72 rounded-full border border-primary/10 animate-[pulse_8s_ease-in-out_infinite]" />
-          <div class="absolute w-60 h-60 rounded-full border border-primary/20 animate-[pulse_5s_ease-in-out_infinite]" />
-          <div class="absolute w-52 h-52 rounded-full bg-primary/10 blur-3xl animate-pulse" />
-
+          <!-- Outer Pulsing Energy Rings — only visible during active listening -->
           <template v-if="isListening">
+            <div class="absolute w-72 h-72 rounded-full border border-primary/10 animate-[pulse_8s_ease-in-out_infinite]" />
+            <div class="absolute w-60 h-60 rounded-full border border-primary/20 animate-[pulse_5s_ease-in-out_infinite]" />
+            <div class="absolute w-52 h-52 rounded-full bg-primary/10 blur-3xl animate-pulse" />
             <div class="absolute w-52 h-52 rounded-full border border-primary/40 pulse-ring" />
             <div class="absolute w-52 h-52 rounded-full border border-primary/25 pulse-ring" style="animation-delay:0.75s" />
           </template>
@@ -256,6 +255,7 @@ function connectWebSocket() {
   socket.onclose = (event) => {
     wsStatus.value = 'disconnected'; clearInterval(pingInterval.value); pingInterval.value = null
     appendTerminalLog(`>> WS_GATEWAY: Connection closed. Code: ${event.code}`)
+    if (event.code === 4003) { agentError.value = 'This agent is currently inactive. Activate it first.'; wsStatus.value = 'failed'; toast.show('This agent is currently inactive and cannot be used. Activate it first.', 'warning'); return }
     if (event.code === 4005) { agentError.value = 'No API key attached to this agent.'; wsStatus.value = 'failed'; showKeySetupBanner.value = true; return }
     if (event.code === 4004) { agentError.value = 'Agent not found.'; wsStatus.value = 'failed'; return }
     if (!intentionalClose.value && reconnectAttempts.value < MAX_RECONNECT) {

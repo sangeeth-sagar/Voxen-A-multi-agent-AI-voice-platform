@@ -7,10 +7,10 @@
     @click="$emit('detail', agent)"
   >
     <!-- Card Header -->
-    <div class="flex items-start justify-between mb-3">
+    <div class="flex items-start justify-between mb-3 relative z-30">
       <div :class="[
         'w-10 h-10 rounded-xl flex items-center justify-center',
-        agent.is_active ? 'bg-primary/10 text-primary' : 'bg-surface-container-high text-on-surface-variant'
+        agent.is_active ? 'bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary' : 'bg-surface-container-high text-on-surface-variant'
       ]">
         <!-- Dynamic Node Icon matching fleet theme -->
         <span class="material-symbols-outlined icon-filled text-lg">
@@ -51,8 +51,8 @@
       </div>
     </div>
 
-    <!-- Hover Actions Cover Panel -->
-    <div class="absolute inset-0 bg-surface/90 html-dark:bg-[#001710]/95 backdrop-blur-sm flex flex-col justify-center p-4 gap-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-20" @click.stop>
+    <!-- Hover Actions Cover Panel (glass morphism) -->
+    <div class="absolute inset-0 bg-surface/80 dark:bg-surface/90 backdrop-blur-sm flex flex-col justify-center p-4 gap-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-20" @click.stop>
       <div class="text-center mb-1">
         <span class="text-xs font-bold text-on-surface block">{{ agent.name }}</span>
         <span class="text-[9px] font-mono text-on-surface-variant">{{ agent.is_voice_agent ? 'Voice Agent' : 'BI Agent' }}</span>

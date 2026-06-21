@@ -125,6 +125,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { apiFetch } from '@/composables/useApi'
 
 const props = defineProps({ timeRange: String })
 const data = ref(null)
@@ -156,8 +157,7 @@ const activeAgentsCount = computed(() => {
 
 async function fetchMetrics() {
   try {
-    const res = await fetch(`/api/v1/metrics/platform?range=${props.timeRange}`)
-    if (res.ok) data.value = await res.json()
+    data.value = await apiFetch(`/api/v1/metrics/platform?range=${props.timeRange}`)
   } catch (e) {
     console.error('Platform metrics error', e)
   }

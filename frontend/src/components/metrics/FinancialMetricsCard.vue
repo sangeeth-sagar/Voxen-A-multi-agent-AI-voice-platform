@@ -44,14 +44,14 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { apiFetch } from '@/composables/useApi'
 
 const props = defineProps({ agentId: String, timeRange: String })
 const data = ref(null)
 
 async function fetchMetrics() {
   try {
-    const res = await fetch(`/api/v1/metrics/${props.agentId}/financial?range=${props.timeRange}`)
-    if (res.ok) data.value = await res.json()
+    data.value = await apiFetch(`/api/v1/metrics/${props.agentId}/financial?range=${props.timeRange}`)
   } catch (e) { console.error('Financial metrics error', e) }
 }
 

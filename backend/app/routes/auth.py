@@ -1,10 +1,14 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from app.auth.security import hash_password, verify_password, create_access_token
+from app.auth.security import (
+    hash_password, verify_password, create_access_token,
+    create_refresh_token, hash_refresh_token,
+)
 from app.auth.dependencies import get_current_user, get_optional_user, require_admin
 from app.config import get_settings
 from app.database import get_db
@@ -14,6 +18,11 @@ from app.schemas.user import (
     UserRegister, UserLogin, UserResponse, TokenResponse, UserUpdate, AdminUserUpdate,
     AdminPasswordReset, UserPasswordReset
 )
+from app.services.notification_store import clear_notifications
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
 
 
 router = APIRouter()
@@ -112,11 +121,20 @@ def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
         )
     # Update last login
     user.last_login = datetime.utcnow()
-    db.commit()
-    # Create access token
+    # Issue access + refresh tokens
     access_token = create_access_token(user.uuid, user.role.value)
+    refresh_token = create_refresh_token()
+    user.refresh_token_hash = hash_refresh_token(refresh_token)
+    user.refresh_token_expires_at = datetime.utcnow() + timedelta(
+        days=get_settings().jwt_refresh_expire_days
+    )
+    user.last_activity_at = datetime.utcnow()
+    db.commit()
     return TokenResponse(
         access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in_minutes=get_settings().jwt_expire_minutes,
         user=UserResponse.model_validate(user),
     )
 
@@ -158,10 +176,57 @@ def update_current_user(
     return UserResponse.model_validate(current_user)
 
 
+@router.post("/refresh")
+def refresh_access_token(
+    body: RefreshRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Exchange a valid refresh token for a new access token.
+    Called by the frontend automatically when the access token is about
+    to expire, ONLY if the user has been active in the last 10 minutes
+    (the frontend enforces this — see useSessionTimer.js).
+    """
+    incoming_hash = hash_refresh_token(body.refresh_token)
+
+    user = db.query(User).filter(
+        User.refresh_token_hash == incoming_hash,
+        User.refresh_token_expires_at > datetime.utcnow(),
+        User.is_active == True,
+    ).first()
+
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid or expired refresh token. Please log in again."
+        )
+
+    new_access_token = create_access_token(user.uuid, user.role.value)
+    new_refresh_token = create_refresh_token()
+    user.refresh_token_hash = hash_refresh_token(new_refresh_token)
+    user.refresh_token_expires_at = datetime.utcnow() + timedelta(
+        days=get_settings().jwt_refresh_expire_days
+    )
+    user.last_activity_at = datetime.utcnow()
+    db.commit()
+
+    return {
+        "access_token": new_access_token,
+        "refresh_token": new_refresh_token,
+        "token_type": "bearer",
+        "expires_in_minutes": get_settings().jwt_expire_minutes,
+    }
+
+
 @router.post("/logout", status_code=status.HTTP_200_OK)
-def logout(current_user: User = Depends(get_current_user)):
-    # JWT is stateless, so we just return a message.
-    # The client should discard the token.
+def logout(
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    current_user.refresh_token_hash = None
+    current_user.refresh_token_expires_at = None
+    db.commit()
+    clear_notifications(current_user.id)
     return {"message": "Logged out successfully"}
 
 

@@ -5,7 +5,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
-from app.routes import auth, admin, agents, plan, voice, webhook, voice_agent
+from app.routes import auth, admin, agents, plan, voice, webhook, voice_agent, notifications
 from app.routes.api_keys import router as keys_router
 from app.routes.ws_voice import router as ws_router
 from app.routes.webhooks import router as webhook_router
@@ -59,6 +59,11 @@ app.include_router(keys_router)
 app.include_router(ws_router)
 app.include_router(metrics_router)
 app.include_router(voice_process_router)
+app.include_router(
+    notifications.router,
+    prefix="/api/v1/notifications",
+    tags=["notifications"],
+)
 
 # Mount test client
 app.mount("/test", StaticFiles(directory="test", html=True), name="test")

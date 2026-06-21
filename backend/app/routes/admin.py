@@ -12,6 +12,7 @@ from app.auth.dependencies import get_current_user
 from app.auth.security import hash_password
 from app.models.user import User
 from app.models.agent_config import AgentConfig
+from app.services.notification_store import add_notification
 
 
 router = APIRouter()
@@ -88,6 +89,22 @@ async def toggle_user_active(
         )
     user.is_active = not user.is_active
     db.commit()
+    if user.is_active:
+        add_notification(
+            user_id=user.id,
+            type="admin_action",
+            title="Account reactivated",
+            message="Your account has been reactivated.",
+            severity="success",
+        )
+    else:
+        add_notification(
+            user_id=user.id,
+            type="admin_action",
+            title="Account suspended",
+            message="Your account has been suspended by an administrator.",
+            severity="warning",
+        )
     return {"user_id": user_id, "is_active": user.is_active}
 
 
@@ -102,6 +119,13 @@ async def promote_to_superadmin(
         raise HTTPException(status_code=404, detail="User not found")
     user.is_superadmin = True
     db.commit()
+    add_notification(
+        user_id=user.id,
+        type="admin_action",
+        title="Role updated",
+        message="Your account role has been changed to superadmin.",
+        severity="info",
+    )
     return {"user_id": user_id, "is_superadmin": True}
 
 
@@ -119,6 +143,13 @@ async def reset_user_password(
     new_password = secrets.token_urlsafe(12)
     user.hashed_password = hash_password(new_password)
     db.commit()
+    add_notification(
+        user_id=user.id,
+        type="admin_action",
+        title="Password reset",
+        message="Your password was reset by an administrator. If this wasn't expected, contact support.",
+        severity="warning",
+    )
     return {"user_id": user_id, "new_password": new_password}
 
 

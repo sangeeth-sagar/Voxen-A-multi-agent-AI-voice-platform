@@ -47,6 +47,7 @@
 
 <script setup>
 import { ref, watch, computed } from 'vue'
+import { apiFetch } from '@/composables/useApi'
 
 const props = defineProps({ agentId: String, timeRange: String })
 const data = ref(null)
@@ -65,8 +66,7 @@ function hourBarHeight(count) { return (count / maxHour.value) * 100 }
 
 async function fetchMetrics() {
   try {
-    const res = await fetch(`/api/v1/metrics/${props.agentId}/volume?range=${props.timeRange}`)
-    if (res.ok) data.value = await res.json()
+    data.value = await apiFetch(`/api/v1/metrics/${props.agentId}/volume?range=${props.timeRange}`)
   } catch (e) { console.error('Volume metrics error', e) }
 }
 

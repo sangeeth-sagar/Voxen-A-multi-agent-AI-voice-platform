@@ -23,6 +23,7 @@ from app.services.stt import transcribe_audio
 from app.services.tts import synthesize_speech
 from app.services.metrics import STT_COST_PER_MINUTE, TTS_COST_PER_CHARACTER
 from app.models.api_call import ApiCall
+from app.services.notification_store import add_notification
 
 logger = structlog.get_logger()
 router = APIRouter(prefix="/api/v1/voice", tags=["voice-orchestration"])
@@ -54,6 +55,10 @@ async def process_voice(
     agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_id).first()
     if not agent:
         raise HTTPException(status_code=404, detail="Agent not found")
+    if not agent.is_active:
+        raise HTTPException(status_code=403, detail="Agent is not active")
+    agent.use_count = (agent.use_count or 0) + 1
+    db.commit()
 
     # 2. Read audio bytes
     audio_bytes = await audio.read()
@@ -145,6 +150,24 @@ async def process_voice(
             webhook_error = "No LLM API key attached to agent"
 
     webhook_ms = (time.time() - webhook_start) * 1000
+
+    # Add notification based on webhook/LLM result
+    if webhook_status == 200:
+        add_notification(
+            user_id=agent.user_id,
+            type="agent_update",
+            title="Webhook call succeeded",
+            message=f'"{agent.name}" received a response from its webhook.',
+            severity="success",
+        )
+    elif webhook_error:
+        add_notification(
+            user_id=agent.user_id,
+            type="agent_update",
+            title="Webhook call failed",
+            message=f'"{agent.name}" webhook call failed: {webhook_error}',
+            severity="error",
+        )
 
     if not response_text:
         raise HTTPException(

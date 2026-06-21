@@ -21,6 +21,7 @@ from app.models.agent_key_assignment import AgentApiKeyAssignment
 from app.models.user_api_key import UserApiKey
 from app.models.user import User
 from app.services.rag import get_chroma_client, get_embedding_function
+from app.services.notification_store import add_notification
 from app.utils.encryption import decrypt_key
 
 router = APIRouter()
@@ -176,6 +177,13 @@ Use them to answer if relevant:
             input_len=len(body.text),
             output_len=len(response_text),
         )
+        add_notification(
+            user_id=current_user.id,
+            type="voice_session",
+            title="Voice session completed",
+            message=f"Your conversation with {agent_name} has ended.",
+            severity="success",
+        )
         return VoiceChatResponse(
             response_text=response_text,
             agent_name=agent_name,
@@ -186,6 +194,13 @@ Use them to answer if relevant:
         raise
     except Exception as e:
         logger.error("voice_chat_error", error=str(e), language=language)
+        add_notification(
+            user_id=current_user.id,
+            type="voice_session",
+            title="Voice session failed",
+            message=f"Something went wrong during your session with {agent_name}.",
+            severity="error",
+        )
         raise HTTPException(
             status_code=500,
             detail="Voice agent failed to respond. Please try again."

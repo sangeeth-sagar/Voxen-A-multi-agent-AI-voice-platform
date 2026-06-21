@@ -16,16 +16,21 @@ function safeParseUser() {
 
 export const useAuthStore = defineStore('auth', () => {
   const token = ref(localStorage.getItem('token') || null)
+  const refreshToken = ref(localStorage.getItem('refresh_token') || null)
   const user = ref(safeParseUser())
 
   const isLoggedIn = computed(() => !!token.value)
   const isAdmin = computed(() => user.value?.role === 'admin' || user.value?.is_superadmin === true)
   const isSuperadmin = computed(() => user.value?.is_superadmin === true)
 
-  function setAuth(accessToken, userData) {
+  function setAuth(accessToken, userData, newRefreshToken = null) {
     token.value = accessToken
     user.value = userData
     localStorage.setItem('token', accessToken)
+    if (newRefreshToken) {
+      refreshToken.value = newRefreshToken
+      localStorage.setItem('refresh_token', newRefreshToken)
+    }
     if (userData && typeof userData === 'object') {
       localStorage.setItem('user', JSON.stringify(userData))
     } else {
@@ -33,10 +38,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  function setTokens(accessToken, newRefreshToken) {
+    token.value = accessToken
+    refreshToken.value = newRefreshToken
+    localStorage.setItem('token', accessToken)
+    localStorage.setItem('refresh_token', newRefreshToken)
+  }
+
   function logout() {
     token.value = null
+    refreshToken.value = null
     user.value = null
     localStorage.removeItem('token')
+    localStorage.removeItem('refresh_token')
     localStorage.removeItem('user')
   }
 
@@ -58,8 +72,8 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   return {
-    token, user,
+    token, refreshToken, user,
     isLoggedIn, isAdmin, isSuperadmin,
-    setAuth, logout, authHeaders, fetchFreshUser
+    setAuth, setTokens, logout, authHeaders, fetchFreshUser
   }
 })

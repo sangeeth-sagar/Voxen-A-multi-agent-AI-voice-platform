@@ -75,10 +75,21 @@
       <header class="topbar justify-end">
         <div class="topbar-actions">
           <ThemeToggle />
-          <div class="notification-bell" @click="showPlaceholderInfo('Notifications')">
+          <div class="notification-bell relative cursor-pointer" @click="notif.togglePanel()">
             <span class="material-symbols-outlined">notifications</span>
-            <span class="notification-dot" />
+            <span v-if="notif.count.value > 0"
+                  class="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full
+                         bg-red-500 text-white text-[9px] font-bold flex items-center
+                         justify-center">
+              {{ notif.count.value > 9 ? '9+' : notif.count.value }}
+            </span>
           </div>
+
+          <NotificationPanel
+            :is-open="notif.isPanelOpen.value"
+            :notifications="notif.notifications.value"
+            @close="notif.closePanel()"
+          />
           <div class="user-profile" @click="goToProfile">
             <div class="avatar-container">
               <span class="material-symbols-outlined avatar-icon">face</span>
@@ -95,11 +106,13 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import ThemeToggle from '@/components/ui/ThemeToggle.vue'
+import NotificationPanel from '@/components/NotificationPanel.vue'
+import { useNotifications } from '@/composables/useNotifications'
 
 const router = useRouter()
 const route = useRoute()
@@ -107,6 +120,13 @@ const auth = useAuthStore()
 const toast = useToastStore()
 
 const user = computed(() => auth.user)
+
+const notif = useNotifications()
+
+onMounted(() => {
+  notif.fetchCount()
+  setInterval(() => notif.fetchCount(), 30000)
+})
 
 const searchPlaceholder = computed(() => {
   if (route.path.startsWith('/profile')) return 'Search system commands...'
@@ -133,9 +153,7 @@ function handleNewAgent() {
   }
 }
 
-function showPlaceholderInfo(feature) {
-  toast.show(`${feature} module is loaded in simulation mode.`, 'info')
-}
+
 </script>
 
 <style scoped>

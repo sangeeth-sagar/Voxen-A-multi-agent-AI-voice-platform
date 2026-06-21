@@ -29,8 +29,11 @@ class User(Base):
     total_jobs       = Column(Integer, default=0)
     total_tokens     = Column(Integer, default=0)
     total_cost_usd   = Column(Float, default=0.0)
-    created_at       = Column(DateTime, default=datetime.utcnow)
-    last_login       = Column(DateTime, nullable=True)
+    created_at              = Column(DateTime, default=datetime.utcnow)
+    last_login              = Column(DateTime, nullable=True)
+    refresh_token_hash      = Column(String, nullable=True)
+    refresh_token_expires_at = Column(DateTime, nullable=True)
+    last_activity_at        = Column(DateTime, nullable=True)
 
     plans        = relationship("Plan", back_populates="user",
                                 foreign_keys="Plan.user_id")

@@ -47,7 +47,9 @@ class UserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None
     token_type: str = "bearer"
+    expires_in_minutes: Optional[int] = None
     user: UserResponse
     needs_api_key: bool = False    # new field — safe default
 

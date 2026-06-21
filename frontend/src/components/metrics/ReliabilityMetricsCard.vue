@@ -56,6 +56,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { apiFetch } from '@/composables/useApi'
 
 const props = defineProps({ agentId: String, timeRange: String })
 const data = ref(null)
@@ -77,8 +78,7 @@ function codeClass(code) {
 
 async function fetchMetrics() {
   try {
-    const res = await fetch(`/api/v1/metrics/${props.agentId}/reliability?range=${props.timeRange}`)
-    if (res.ok) data.value = await res.json()
+    data.value = await apiFetch(`/api/v1/metrics/${props.agentId}/reliability?range=${props.timeRange}`)
   } catch (e) { console.error('Reliability metrics error', e) }
 }
 

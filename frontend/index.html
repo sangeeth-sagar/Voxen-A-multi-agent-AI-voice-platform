@@ -8,10 +8,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
     <script>
-      // FOUC prevention: apply theme before paint
-      (function() {
-        var t = localStorage.getItem('agentiq_theme');
-        if (t === 'dark' || (!t && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      // FOUC prevention: apply theme before paint.
+      // Must use the SAME localStorage keys as useTheme.js (auth_theme / app_theme)
+      // so the inline script and the Vue runtime agree on the theme from the start.
+      (function () {
+        var isAuthRoute = window.location.pathname === '/login' ||
+                          window.location.pathname === '/register';
+        var key = isAuthRoute ? 'auth_theme' : 'app_theme';
+        var theme = localStorage.getItem(key) || 'light';
+        if (theme === 'dark') {
           document.documentElement.classList.add('dark');
         }
       })();

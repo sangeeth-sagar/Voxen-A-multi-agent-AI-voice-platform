@@ -41,6 +41,7 @@ from app.tts_router import synthesize
 from app.services.rag import retrieve_context
 from app.utils.llm_utils import extract_text_from_content
 from app.models.api_call import ApiCall
+from app.services.notification_store import add_notification
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,10 @@ async def voice_websocket(
         if not agent:
             await websocket.send_json({"type": "error", "message": "Agent not found"})
             await websocket.close(code=4004)
+            return
+        if not agent.is_active:
+            await websocket.send_json({"type": "error", "message": "Agent is not active"})
+            await websocket.close(code=4003)
             return
 
         assignment = (
@@ -112,6 +117,9 @@ async def voice_websocket(
             )
             if tts_key_row:
                 tts_key = decrypt_key(tts_key_row.api_key)
+
+        agent.use_count = (agent.use_count or 0) + 1
+        db.commit()
 
         session_id = f"ws_{uuid.uuid4().hex[:12]}"
         conversation_history: list = []
@@ -334,6 +342,16 @@ async def voice_websocket(
                 continue
 
     except WebSocketDisconnect:
+        try:
+            add_notification(
+                user_id=agent.user_id,
+                type="voice_session",
+                title="Voice session completed",
+                message=f"Your conversation with {agent.name} has ended.",
+                severity="success",
+            )
+        except Exception:
+            pass
         return
     except Exception as exc:
         traceback.print_exc()
@@ -341,5 +359,15 @@ async def voice_websocket(
         print(f"WS CRASH: {type(exc).__name__}: {exc}")
         try:
             await websocket.send_json({"type": "error", "message": str(exc)})
+        except Exception:
+            pass
+        try:
+            add_notification(
+                user_id=agent.user_id,
+                type="voice_session",
+                title="Voice session failed",
+                message=f"Something went wrong during your session with {agent.name}.",
+                severity="error",
+            )
         except Exception:
             pass

@@ -1,14 +1,14 @@
 <template>
   <div class="theme-toggle">
     <button
-      @click="setTheme('light')"
+      @click="toggle()"
       :class="['theme-btn', { active: !isDark }]"
       title="Light mode"
     >
       <span class="material-symbols-outlined">light_mode</span>
     </button>
     <button
-      @click="setTheme('dark')"
+      @click="toggle()"
       :class="['theme-btn', { active: isDark }]"
       title="Dark mode"
     >
@@ -18,12 +18,11 @@
 </template>
 
 <script setup>
-import { useThemeStore } from '@/stores/theme'
-import { storeToRefs } from 'pinia'
+import { computed } from 'vue'
+import { useAppTheme } from '@/composables/useTheme'
 
-const themeStore = useThemeStore()
-const { isDark } = storeToRefs(themeStore)
-const { setTheme } = themeStore
+const { theme, toggle } = useAppTheme()
+const isDark = computed(() => theme.value === 'dark')
 </script>
 
 <style scoped>

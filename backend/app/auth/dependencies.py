@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Optional
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -39,6 +40,8 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found or deactivated",
         )
+    user.last_activity_at = datetime.utcnow()
+    db.commit()
     return user
 
 

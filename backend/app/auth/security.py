@@ -8,6 +8,8 @@ appears with newer bcrypt releases.
 from datetime import datetime, timedelta
 from typing import Optional
 import bcrypt
+import hashlib
+import secrets
 from jose import JWTError, jwt
 from app.config import get_settings
 
@@ -51,3 +53,17 @@ def decode_access_token(token: str) -> Optional[dict]:
         return jwt.decode(token, settings.jwt_secret, algorithms=["HS256"])
     except JWTError:
         return None
+
+
+def create_refresh_token() -> str:
+    """Generate a cryptographically random opaque refresh token (not a JWT)."""
+    return secrets.token_urlsafe(48)
+
+
+def hash_refresh_token(token: str) -> str:
+    """Hash the refresh token before storing — never store it plaintext."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def verify_refresh_token(token: str, stored_hash: str) -> bool:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest() == stored_hash

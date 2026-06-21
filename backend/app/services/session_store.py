@@ -2,6 +2,7 @@ import structlog
 from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models.plan import ConversationSession
+from app.models.agent_config import AgentConfig
 from datetime import datetime
 
 logger = structlog.get_logger()
@@ -24,6 +25,13 @@ async def create_session(
     db.add(session)
     db.commit()
     db.refresh(session)
+
+    if agent_id:
+        agent = db.query(AgentConfig).filter(AgentConfig.id == agent_id).first()
+        if agent:
+            agent.use_count = (agent.use_count or 0) + 1
+            db.commit()
+
     logger.info("session_created", session_id=session.session_id, user_id=user_id, agent_id=agent_id)
     return session
 

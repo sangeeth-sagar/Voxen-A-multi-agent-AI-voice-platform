@@ -14,6 +14,7 @@ from app.schemas.agent_config import (
     AgentConfigCreate, AgentConfigUpdate, AgentConfigResponse
 )
 from app.config import get_settings
+from app.services.notification_store import add_notification
 
 router = APIRouter()
 
@@ -120,6 +121,14 @@ def create_agent(
         db.add(assignment)
         db.commit()
         db.refresh(assignment)
+
+    add_notification(
+        user_id=current_user.id,
+        type="agent_update",
+        title="Agent created",
+        message=f'"{agent.name}" has been created successfully.',
+        severity="success",
+    )
 
     # Return response with owner_username + key info
     agent_dict = AgentConfigResponse.model_validate(agent).model_dump()
@@ -229,6 +238,14 @@ def update_agent(
             )
             db.add(new_assignment)
         db.commit()
+
+    add_notification(
+        user_id=current_user.id,
+        type="agent_update",
+        title="Agent updated",
+        message=f'"{agent.name}" has been updated.',
+        severity="info",
+    )
 
     # Return response with owner_username + key info
     owner_username = None
@@ -365,6 +382,14 @@ def activate_agent(
     db.commit()
     db.refresh(agent)
 
+    add_notification(
+        user_id=current_user.id,
+        type="agent_update",
+        title="Webhook activated",
+        message=f'Webhook endpoint created for "{agent.name}".',
+        severity="success",
+    )
+
     # Log activation
     import structlog
     logger = structlog.get_logger()
@@ -425,6 +450,14 @@ def deactivate_agent(
     db.commit()
     db.refresh(agent)
     
+    add_notification(
+        user_id=current_user.id,
+        type="agent_update",
+        title="Webhook deactivated",
+        message=f'Webhook endpoint removed for "{agent.name}".',
+        severity="info",
+    )
+
     # Log deactivation
     import structlog
     logger = structlog.get_logger()
