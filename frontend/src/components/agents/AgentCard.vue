@@ -55,7 +55,7 @@
     <div class="absolute inset-0 bg-surface/80 dark:bg-surface/90 backdrop-blur-sm flex flex-col justify-center p-4 gap-2 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out z-20" @click.stop>
       <div class="text-center mb-1">
         <span class="text-xs font-bold text-on-surface block">{{ agent.name }}</span>
-        <span class="text-[9px] font-mono text-on-surface-variant">{{ agent.is_voice_agent ? 'Voice Agent' : 'BI Agent' }}</span>
+        <span class="text-[9px] font-mono text-on-surface-variant">{{ agent.is_voice_agent ? 'Voice Agent' : 'Chat Agent' }}</span>
       </div>
 
       <div class="grid grid-cols-2 gap-2">
@@ -300,83 +300,83 @@ html.dark .btn-action-primary {
   background: rgba(14, 108, 74, 0.15);
 }
 
-/* Dark mode light card override */
+/* Dark mode glass card override */
 html.dark .glass-card {
-  background: #f3f4f5 !important;
-  color: #191c1d !important;
-  border-color: #d9dadb !important;
+  background: rgba(30, 34, 48, 0.4) !important;
+  color: var(--color-on-surface) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 html.dark .glass-card h3 {
-  color: #191c1d !important;
+  color: var(--color-on-surface) !important;
 }
 
 html.dark .glass-card p {
-  color: #414844 !important;
+  color: var(--color-on-surface-variant) !important;
 }
 
 html.dark .glass-card .font-bold.text-on-surface {
-  color: #191c1d !important;
+  color: var(--color-on-surface) !important;
 }
 
 html.dark .glass-card .text-on-surface-variant {
-  color: #414844 !important;
+  color: var(--color-on-surface-variant) !important;
 }
 
 html.dark .glass-card .status-indicator-badge.STANDBY {
-  background: #d9dadb !important;
-  color: #414844 !important;
-  border-color: #c1c8c2 !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
 }
 
 /* Hover cover panel on dark mode cards */
 html.dark .translate-y-full {
-  background: rgba(243, 244, 245, 0.98) !important;
-  color: #191c1d !important;
+  background: rgba(30, 34, 48, 0.96) !important;
+  color: var(--color-on-surface) !important;
 }
 
 html.dark .group-hover\:translate-y-0 {
-  background: rgba(243, 244, 245, 0.98) !important;
-  color: #191c1d !important;
+  background: rgba(30, 34, 48, 0.96) !important;
+  color: var(--color-on-surface) !important;
 }
 
 html.dark .btn-action {
-  background: #edeeef !important;
-  border-color: #c1c8c2 !important;
-  color: #012d1d !important;
+  background: rgba(255, 255, 255, 0.05) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: var(--color-on-surface) !important;
 }
 
 html.dark .btn-action:hover {
-  background: #d9dadb !important;
+  background: rgba(255, 255, 255, 0.1) !important;
 }
 
 html.dark .btn-action-primary {
-  background: #0e6c4a !important;
-  color: #ffffff !important;
+  background: var(--color-primary) !important;
+  color: var(--color-on-primary) !important;
   border: none !important;
 }
 
 html.dark .btn-action-primary:hover {
-  background: #012d1d !important;
+  filter: brightness(1.15) !important;
 }
 
 html.dark .btn-action-danger {
-  background: rgba(186, 26, 26, 0.1) !important;
-  color: #ba1a1a !important;
-  border: 1px solid rgba(186, 26, 26, 0.3) !important;
+  background: rgba(239, 68, 68, 0.1) !important;
+  color: var(--color-tactical-red) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
 }
 
 html.dark .btn-action-danger:hover {
-  background: rgba(186, 26, 26, 0.2) !important;
+  background: rgba(239, 68, 68, 0.2) !important;
 }
 
 html.dark .btn-action-success {
-  background: rgba(14, 108, 74, 0.1) !important;
-  color: #0e6c4a !important;
-  border: 1px solid rgba(14, 108, 74, 0.3) !important;
+  background: rgba(165, 209, 170, 0.1) !important;
+  color: #a5d1aa !important;
+  border: 1px solid rgba(165, 209, 170, 0.3) !important;
 }
 
 html.dark .btn-action-success:hover {
-  background: rgba(14, 108, 74, 0.2) !important;
+  background: rgba(165, 209, 170, 0.2) !important;
 }
 </style>

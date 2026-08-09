@@ -20,7 +20,7 @@
           </svg>
         </div>
         <div class="logo-text">
-          <span class="logo-title">AgentIQ</span>
+          <span class="logo-title">Voxen</span>
           <span class="logo-subtitle">Neural OS v4.2</span>
         </div>
       </div>
@@ -36,12 +36,32 @@
 
         <RouterLink to="/" class="nav-item" :class="{ active: $route.path === '/' }">
           <span class="material-symbols-outlined">psychology</span>
-          <span class="nav-label">Neural Engine</span>
+          <span class="nav-label">Voice Engine</span>
+        </RouterLink>
+
+        <RouterLink to="/chat" class="nav-item" :class="{ active: $route.path === '/chat' }">
+          <span class="material-symbols-outlined">chat_bubble</span>
+          <span class="nav-label">Chat Engine</span>
         </RouterLink>
 
         <RouterLink to="/agents" class="nav-item" :class="{ active: $route.path.startsWith('/agents') && !$route.path.endsWith('/analytics') }">
           <span class="material-symbols-outlined">mic</span>
           <span class="nav-label">Voice Lab</span>
+        </RouterLink>
+
+        <RouterLink to="/chat-lab" class="nav-item" :class="{ active: $route.path.startsWith('/chat-lab') }">
+          <span class="material-symbols-outlined">forum</span>
+          <span class="nav-label">Chat Lab</span>
+        </RouterLink>
+
+        <RouterLink to="/telegram-bots" class="nav-item" :class="{ active: $route.path.startsWith('/telegram-bots') }">
+          <span class="material-symbols-outlined">smart_toy</span>
+          <span class="nav-label">Telegram Bots</span>
+        </RouterLink>
+
+        <RouterLink to="/voxen-keys" class="nav-item" :class="{ active: $route.path.startsWith('/voxen-keys') }">
+          <span class="material-symbols-outlined">key</span>
+          <span class="nav-label">API Keys</span>
         </RouterLink>
       </div>
 
@@ -148,15 +168,12 @@ function goToProfile() {
 }
 
 function handleNewAgent() {
-  if (route.path.startsWith('/agents')) {
-    // If already on agents page, trigger query param or custom event
-    router.replace({ path: '/agents', query: { new: 'true', t: Date.now() } })
+  if (route.path.startsWith('/chat') || route.path.startsWith('/chat-lab')) {
+    router.push({ path: '/chat-lab', query: { new: 'true' } })
   } else {
     router.push({ path: '/agents', query: { new: 'true' } })
   }
 }
-
-
 </script>
 
 <style scoped>
@@ -181,6 +198,22 @@ function handleNewAgent() {
   flex-direction: column;
   gap: 16px;
   z-index: 40;
+  overflow-y: auto;
+}
+
+/* Premium scrollbar for sidebar */
+.sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(165, 209, 170, 0.15);
+  border-radius: 99px;
+}
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: rgba(165, 209, 170, 0.3);
 }
 
 html.dark .sidebar {

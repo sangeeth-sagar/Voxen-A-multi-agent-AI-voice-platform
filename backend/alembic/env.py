@@ -17,6 +17,10 @@ import app.models.plan
 import app.models.user_api_key
 import app.models.agent_key_assignment
 import app.models.webhook_endpoint
+import app.models.agent_memory
+import app.models.agent_tool
+import app.models.api_call
+import app.models.voice_session
 
 # Alembic Config object
 config = context.config

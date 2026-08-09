@@ -3,15 +3,15 @@
     <!-- Header -->
     <div class="flex items-center justify-between mb-6 shrink-0 flex-wrap gap-4">
       <div>
-        <h1 class="font-sans text-2xl font-bold text-on-surface tracking-tight">Intelligence Fleet</h1>
+        <h1 class="font-sans text-2xl font-bold text-on-surface tracking-tight">Voice Lab</h1>
         <p class="font-mono text-[11px] text-on-surface-variant/60 uppercase tracking-wider mt-1">
-          {{ activeNodesCount }} Active Nodes • {{ tabs[0].label }} ({{ tabCount('voice') }} deployed)
+          {{ activeNodesCount }} Active Voice Nodes • {{ tabCount('voice') }} Voice Agents Deployed
         </p>
       </div>
       <button @click="openBuilder(null)"
         class="btn-primary-rect px-5 py-2.5 rounded-xl text-sm font-semibold flex items-center gap-2">
         <span class="material-symbols-outlined text-[18px]">add</span>
-        New Node
+        New Voice Node
       </button>
     </div>
 
@@ -101,24 +101,21 @@ const viewMode = ref('grid')
 
 const tabs = [
   { key: 'voice', label: 'Voice Agents' },
-  { key: 'bi', label: 'BI Agents' },
-  { key: 'templates', label: 'Templates' },
+  { key: 'templates', label: 'Voice Templates' },
 ]
 
 const activeNodesCount = computed(() => {
-  return agents.value.filter(a => a.is_active).length
+  return agents.value.filter(a => a.is_active && a.is_voice_agent).length
 })
 
 const filteredAgents = computed(() => {
-  if (activeTab.value === 'voice') return agents.value.filter(a => a.is_voice_agent)
-  if (activeTab.value === 'bi') return agents.value.filter(a => !a.is_voice_agent && !a.is_template)
-  return agents.value.filter(a => a.is_template)
+  if (activeTab.value === 'voice') return agents.value.filter(a => a.is_voice_agent && !a.is_template)
+  return agents.value.filter(a => a.is_voice_agent && a.is_template)
 })
 
 function tabCount(key) {
-  if (key === 'voice') return agents.value.filter(a => a.is_voice_agent).length
-  if (key === 'bi') return agents.value.filter(a => !a.is_voice_agent && !a.is_template).length
-  return agents.value.filter(a => a.is_template).length
+  if (key === 'voice') return agents.value.filter(a => a.is_voice_agent && !a.is_template).length
+  return agents.value.filter(a => a.is_voice_agent && a.is_template).length
 }
 
 async function fetchAgents() {

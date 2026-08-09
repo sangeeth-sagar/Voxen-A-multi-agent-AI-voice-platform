@@ -86,3 +86,8 @@ class UserPasswordReset(BaseModel):
         if len(v) < 8:
             raise ValueError("Password must be at least 8 characters")
         return v
+
+
+class GoogleLoginRequest(BaseModel):
+    token: Optional[str] = None
+    credential: Optional[str] = None

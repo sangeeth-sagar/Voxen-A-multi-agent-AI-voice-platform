@@ -13,7 +13,7 @@
       </div>
     </div>
 
-    <div v-if="loading" class="text-center py-8 text-on-surface-variant">Loading...</div>
+    <div v-if="loading && logs.length === 0" class="text-center py-8 text-on-surface-variant">Loading...</div>
     <div v-else-if="filteredLogs.length === 0" class="text-center py-8 text-on-surface-variant">No logs found</div>
 
     <div v-else class="overflow-x-auto">
@@ -35,10 +35,10 @@
             <td class="py-2 text-xs text-on-surface-variant whitespace-nowrap">{{ formatTime(log.created_at) }}</td>
             <td class="py-2 max-w-[200px] truncate text-on-surface">{{ log.user_text }}</td>
             <td class="py-2 max-w-[200px] truncate text-on-surface-variant">{{ log.agent_response }}</td>
-            <td class="py-2 text-right font-mono text-xs text-on-surface">{{ log.stt_latency_ms }}ms</td>
-            <td class="py-2 text-right font-mono text-xs text-on-surface">{{ log.webhook_latency_ms }}ms</td>
-            <td class="py-2 text-right font-mono text-xs text-on-surface">{{ log.tts_latency_ms }}ms</td>
-            <td class="py-2 text-right font-mono text-xs font-bold text-on-surface">{{ log.total_latency_ms }}ms</td>
+            <td class="py-2 text-right font-mono text-xs text-on-surface">{{ log.stt_latency_ms != null ? log.stt_latency_ms + 'ms' : '—' }}</td>
+            <td class="py-2 text-right font-mono text-xs text-on-surface">{{ log.webhook_latency_ms != null ? log.webhook_latency_ms + 'ms' : '—' }}</td>
+            <td class="py-2 text-right font-mono text-xs text-on-surface">{{ log.tts_latency_ms != null ? log.tts_latency_ms + 'ms' : '—' }}</td>
+            <td class="py-2 text-right font-mono text-xs font-bold text-on-surface">{{ log.total_latency_ms != null ? log.total_latency_ms + 'ms' : '—' }}</td>
             <td class="py-2 text-right">
               <span class="px-2 py-0.5 rounded text-xs font-bold" :class="statusClass(log.webhook_status)">
                 {{ log.webhook_status || 'ERR' }}
@@ -52,8 +52,13 @@
     <div class="flex justify-between items-center mt-4 text-sm text-on-surface-variant">
       <span>{{ filteredLogs.length }} of {{ logs.length }} logs</span>
       <div class="flex gap-2">
-        <button @click="loadMore" :disabled="logs.length < limit" class="px-3 py-1 border border-outline-variant rounded disabled:opacity-40 bg-surface text-on-surface hover:bg-surface-container-high">
-          Load More
+        <button 
+          @click="loadMore" 
+          :disabled="loading || logs.length < limit" 
+          class="px-3 py-1 border border-outline-variant rounded disabled:opacity-40 bg-surface text-on-surface hover:bg-surface-container-high flex items-center gap-1.5"
+        >
+          <span v-if="loading" class="material-symbols-outlined text-[14px] animate-spin">refresh</span>
+          {{ loading ? 'Loading...' : 'Load More' }}
         </button>
       </div>
     </div>

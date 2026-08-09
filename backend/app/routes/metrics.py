@@ -130,7 +130,7 @@ def logs(
             "webhook_status": r.webhook_status,
             "webhook_error_message": r.webhook_error_message,
             "language": r.language,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "created_at": f"{r.created_at.isoformat()}Z" if r.created_at else None,
         }
         for r in rows
     ]

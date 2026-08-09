@@ -1,36 +1,48 @@
 import structlog
 import uuid
-from typing import List
+from typing import List, Optional
 import os
+import requests
+from sqlalchemy.orm import Session
 from app.config import get_settings
-
 logger = structlog.get_logger(__name__)
 
 # ─── Module-level singletons ──────────────────────────────────────────────
-# Loaded ONCE when this module is first imported, never re-per-request.
-_embedding_model = None
 _chroma_client = None
-_embedding_fn = None
 
 
-def get_embedding_model():
-    """Lazy singleton -- model loads once, reused for all subsequent calls."""
-    global _embedding_model
-    if _embedding_model is None:
-        from sentence_transformers import SentenceTransformer
-        settings = get_settings()
-        logger.info("loading_embedding_model", model=settings.embedding_model)
-        _embedding_model = SentenceTransformer(settings.embedding_model)
-        logger.info("embedding_model_loaded")
-    return _embedding_model
+def resolve_user_gemini_key(db: Session, user_id: int) -> Optional[str]:
+    """Helper to query the user's active Gemini API key from the database,
+    falling back to settings.google_api_key.
+    """
+    from app.models.user_api_key import UserApiKey
+    from app.utils.encryption import decrypt_key
+    from app.config import settings
+
+    key_row = (
+        db.query(UserApiKey)
+        .filter(
+            UserApiKey.user_id == user_id,
+            UserApiKey.provider == "gemini",
+            UserApiKey.is_active == True,
+        )
+        .first()
+    )
+    if key_row:
+        try:
+            return decrypt_key(key_row.api_key)
+        except Exception:
+            pass
+
+    if settings.google_api_key:
+        return settings.google_api_key
+
+    return None
 
 
-def get_embedding_function():
-    """Returns a singleton ChromaDB-compatible embedding function."""
-    global _embedding_fn
-    if _embedding_fn is None:
-        _embedding_fn = SentenceTransformerEmbeddingFunction()
-    return _embedding_fn
+def get_embedding_function(api_key: Optional[str] = None):
+    """Returns a ChromaDB-compatible Gemini API embedding function."""
+    return GeminiEmbeddingFunction(api_key)
 
 
 def get_chroma_client():
@@ -48,27 +60,52 @@ def get_chroma_client():
     return _chroma_client
 
 
-class SentenceTransformerEmbeddingFunction:
+class GeminiEmbeddingFunction:
     """
-    ChromaDB-compatible embedding function.
-    Uses the shared singleton model -- never instantiates its own model.
+    ChromaDB-compatible embedding function using the Gemini API.
+    Does not require PyTorch or transformers locally.
     """
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or get_settings().google_api_key
+
     def __call__(self, input: List[str]) -> List[List[float]]:
-        model = get_embedding_model()
-        embeddings = model.encode(input, convert_to_numpy=True)
-        return embeddings.tolist()
+        if not self.api_key:
+            raise ValueError(
+                "Gemini API key is required for RAG embeddings. "
+                "Please configure a Gemini API key in your Profile or .env file."
+            )
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:batchEmbedContents?key={self.api_key}"
+            payload = {
+                "requests": [
+                    {
+                        "model": "models/gemini-embedding-001",
+                        "content": {"parts": [{"text": text}]},
+                        "outputDimensionality": 384
+                    }
+                    for text in input
+                ]
+            }
+            response = requests.post(url, json=payload, timeout=15)
+            response.raise_for_status()
+            data = response.json()
+            embeddings = [emb["values"] for emb in data.get("embeddings", [])]
+            return embeddings
+        except Exception as e:
+            logger.error("gemini_embedding_failed", error=str(e))
+            raise RuntimeError(f"Failed to generate Gemini embeddings: {str(e)}") from e
 
 
 # ─── Public API ────────────────────────────────────────────────────────────
 
-async def create_kb_collection(collection_name: str) -> str:
+async def create_kb_collection(collection_name: str, api_key: Optional[str] = None) -> str:
     """
     Creates a ChromaDB collection with the given name.
-    Uses SentenceTransformer embedding function.
+    Uses Gemini embedding function.
     """
     try:
         chroma_client = get_chroma_client()
-        embedding_function = get_embedding_function()
+        embedding_function = get_embedding_function(api_key)
 
         collection = chroma_client.get_or_create_collection(
             name=collection_name,
@@ -107,6 +144,7 @@ async def ingest_file(
     filename: str,
     chunk_size: int = 500,
     chunk_overlap: int = 50,
+    api_key: Optional[str] = None,
 ) -> int:
     """
     Ingest a file (PDF or text) into the knowledge base collection.
@@ -136,7 +174,7 @@ async def ingest_file(
         ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
 
         chroma_client = get_chroma_client()
-        embedding_function = get_embedding_function()
+        embedding_function = get_embedding_function(api_key)
 
         collection = chroma_client.get_collection(
             name=collection_name,
@@ -160,6 +198,7 @@ async def ingest_text(
     collection_name: str,
     text: str,
     source: str = "manual",
+    api_key: Optional[str] = None,
 ) -> int:
     """
     Ingest raw text into the knowledge base collection.
@@ -178,7 +217,7 @@ async def ingest_text(
         ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
 
         chroma_client = get_chroma_client()
-        embedding_function = get_embedding_function()
+        embedding_function = get_embedding_function(api_key)
 
         collection = chroma_client.get_collection(
             name=collection_name,
@@ -202,6 +241,7 @@ async def retrieve_context(
     collection_name: str,
     query: str,
     top_k: int = None,
+    api_key: Optional[str] = None,
 ) -> str:
     """
     Retrieve context from the knowledge base collection.
@@ -212,7 +252,7 @@ async def retrieve_context(
             top_k = settings.rag_top_k
 
         chroma_client = get_chroma_client()
-        embedding_function = get_embedding_function()
+        embedding_function = get_embedding_function(api_key)
 
         collection = chroma_client.get_collection(
             name=collection_name,

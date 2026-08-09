@@ -9,7 +9,7 @@ from app.services.session_store import (
     create_session, add_message,
     get_session_messages, get_session, get_user_sessions
 )
-from app.services.rag import retrieve_context
+from app.services.rag import retrieve_context, resolve_user_gemini_key
 from app.services.llm_agent import run_agent_turn
 from app.models.agent_config import AgentConfig
 from app.models.user import User
@@ -67,8 +67,9 @@ async def voice_agent_chat(
     # 4. Get RAG context if kb_enabled
     kb_context = ""
     if agent.kb_enabled and agent.kb_collection_name:
+        api_key = resolve_user_gemini_key(db, agent.user_id)
         kb_context = await retrieve_context(
-            agent.kb_collection_name, text
+            agent.kb_collection_name, text, api_key=api_key
         )
     
     # 5. Call run_agent_turn (resolves the per-user API key inside)

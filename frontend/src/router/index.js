@@ -13,7 +13,11 @@ const routes = [
     meta: { requiresAuth: true },
     children: [
       { path: '',        name: 'Voice',    component: () => import('@/views/VoiceView.vue') },
+      { path: 'chat',    name: 'Chat',     component: () => import('@/views/ChatView.vue') },
       { path: 'agents',  name: 'Agents',   component: () => import('@/views/AgentsView.vue') },
+      { path: 'chat-lab', name: 'ChatLab',  component: () => import('@/views/ChatAgentsView.vue') },
+      { path: 'telegram-bots', name: 'TelegramBots', component: () => import('@/views/TelegramBotsView.vue') },
+      { path: 'voxen-keys', name: 'VoxenKeys', component: () => import('@/views/VoxenKeysView.vue') },
       { path: 'analytics', name: 'Analytics', component: () => import('@/views/MetricsDashboardView.vue') },
       { path: 'agents/:uuid/analytics', name: 'AgentAnalytics', component: () => import('@/views/MetricsDashboardView.vue') },
       { path: 'profile', name: 'Profile',  component: () => import('@/views/ProfileView.vue') },

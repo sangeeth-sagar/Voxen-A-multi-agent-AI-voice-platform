@@ -7,6 +7,7 @@ Flow:
   → text response
   → Browser speechSynthesis speaks it
 """
+import uuid
 import structlog
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -15,12 +16,12 @@ from typing import Optional
 
 from app.auth.dependencies import get_current_user
 from app.database import get_db
-from app.llm_router import chat as llm_chat, normalize_language
+from app.llm_router import chat as llm_chat, chat_with_tools, normalize_language, build_system_prompt
 from app.models.agent_config import AgentConfig
 from app.models.agent_key_assignment import AgentApiKeyAssignment
 from app.models.user_api_key import UserApiKey
 from app.models.user import User
-from app.services.rag import get_chroma_client, get_embedding_function
+from app.services.rag import get_chroma_client, get_embedding_function, resolve_user_gemini_key
 from app.services.notification_store import add_notification
 from app.utils.encryption import decrypt_key
 
@@ -127,10 +128,11 @@ async def voice_chat(
         # relevant chunks and append them to the system prompt.
         if agent.kb_collection_name:
             try:
+                api_key = resolve_user_gemini_key(db, agent.user_id)
                 client = get_chroma_client()
                 collection = client.get_collection(
                     agent.kb_collection_name,
-                    embedding_function=get_embedding_function(),
+                    embedding_function=get_embedding_function(api_key),
                 )
                 results = collection.query(
                     query_texts=[body.text],
@@ -159,14 +161,32 @@ Use them to answer if relevant:
     llm_key, llm_provider = _load_user_llm_key(db, agent)
 
     try:
-        response_text = await llm_chat(
-            text=body.text.strip(),
-            base_system_prompt=system_prompt,
-            agent_name=agent_name,
-            language=language,
-            api_key=llm_key,
-            llm_provider=llm_provider,
-        )
+        from app.models.agent_tool import AgentTool
+        has_tools = db.query(AgentTool).filter(
+            AgentTool.agent_id == agent.id, AgentTool.is_active == True
+        ).first() is not None
+
+        if has_tools:
+            response_text = await chat_with_tools(
+                text=body.text.strip(),
+                agent_config=agent,
+                api_key=llm_key,
+                llm_provider=llm_provider,
+                language=language,
+                history=None,
+                db=db,
+                user_id=current_user.id,
+                session_id=f"http_{uuid.uuid4().hex[:12]}",
+            )
+        else:
+            response_text = await llm_chat(
+                text=body.text.strip(),
+                base_system_prompt=system_prompt,
+                agent_name=agent_name,
+                language=language,
+                api_key=llm_key,
+                llm_provider=llm_provider,
+            )
 
         logger.info(
             "voice_chat_success",

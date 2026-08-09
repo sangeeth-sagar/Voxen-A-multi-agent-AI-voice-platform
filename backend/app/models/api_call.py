@@ -30,5 +30,10 @@ class ApiCall(Base):
     characters_count = Column(Integer, nullable=True)
     language = Column(String, default="en")
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    # Tool invocation fields
+    tool_name = Column(String, nullable=True)
+    tool_target_url = Column(String, nullable=True)
+    tool_status_code = Column(Integer, nullable=True)
+    tool_latency_ms = Column(Float, nullable=True)
 
     agent = relationship("AgentConfig", backref="api_calls")

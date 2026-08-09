@@ -1,5 +1,5 @@
 {
-  "name": "agentiq-vue",
+  "name": "voxen-vue",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,8 @@
   "dependencies": {
     "vue": "^3.4.0",
     "vue-router": "^4.3.0",
-    "pinia": "^2.1.0"
+    "pinia": "^2.1.0",
+    "vue3-google-login": "^2.0.3"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.0",

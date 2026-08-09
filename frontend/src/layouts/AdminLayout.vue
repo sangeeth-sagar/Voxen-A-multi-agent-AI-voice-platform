@@ -4,7 +4,7 @@
       <div class="admin-logo">
         <span class="material-symbols-outlined">shield</span>
         <div>
-          <div class="admin-logo-text">AgentIQ</div>
+          <div class="admin-logo-text">Voxen</div>
           <div class="admin-logo-sub">Admin Console</div>
         </div>
       </div>

@@ -1,11 +1,11 @@
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Response, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Response, Depends, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 import structlog
 
 from app.services.stt import transcribe_audio
 from app.services.tts import synthesize_speech
-from app.services.rag import retrieve_context
+from app.services.rag import retrieve_context, resolve_user_gemini_key
 from app.services.session_store import (
     create_session, add_message,
     get_session_messages, get_session
@@ -23,9 +23,11 @@ router = APIRouter()
 @router.post("/{webhook_id}")
 async def handle_webhook(
     webhook_id: str,
+    request: Request,
     audio: UploadFile = File(...),
     language: str = Form("en"),
     session_id: Optional[str] = None,
+    api_key: Optional[str] = Form(None),
     db: Session = Depends(get_db)
 ):
     """
@@ -45,6 +47,38 @@ async def handle_webhook(
     if not agent.is_active:
         logger.warning("agent_not_active", webhook_id=webhook_id, agent_id=agent.id)
         raise HTTPException(status_code=403, detail="Agent is not active")
+
+    # Secure webhook validation using Voxen API Keys (if configured for this agent)
+    from app.models.voxen_api_key import VoxenApiKey
+    active_keys_exist = db.query(VoxenApiKey).filter(
+        VoxenApiKey.agent_id == agent.id,
+        VoxenApiKey.is_active == True
+    ).first()
+
+    if active_keys_exist:
+        api_key_val = request.headers.get("X-Voxen-API-Key")
+        if not api_key_val:
+            api_key_val = request.query_params.get("api_key")
+        if not api_key_val:
+            api_key_val = api_key
+
+        if not api_key_val:
+            raise HTTPException(
+                status_code=401,
+                detail="Missing X-Voxen-API-Key header, query param, or form parameter for this secured agent"
+            )
+        
+        valid_key = db.query(VoxenApiKey).filter(
+            VoxenApiKey.agent_id == agent.id,
+            VoxenApiKey.api_key == api_key_val,
+            VoxenApiKey.is_active == True
+        ).first()
+
+        if not valid_key:
+            raise HTTPException(
+                status_code=401,
+                detail="Invalid or revoked API Key"
+            )
 
     # 2. Read audio bytes from upload
     audio_bytes = await audio.read()
@@ -76,8 +110,9 @@ async def handle_webhook(
     # 6. Get RAG context if kb enabled
     kb_context = ""
     if agent.kb_enabled and agent.kb_collection_name:
+        api_key = resolve_user_gemini_key(db, agent.user_id)
         kb_context = await retrieve_context(
-            agent.kb_collection_name, transcribed_text
+            agent.kb_collection_name, transcribed_text, api_key=api_key
         )
 
     # 7. Resolve the agent's per-user API key and run the LLM.

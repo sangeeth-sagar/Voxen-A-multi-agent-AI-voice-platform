@@ -16,13 +16,17 @@ Note: every chat() / chat_with_provider() call requires an explicit
 `api_key`. The server no longer falls back to `settings.google_api_key`
 — users add their own keys via Profile → API Keys.
 """
+import json
+import time
 from typing import Any, Dict, List, Optional
 import structlog
+from sqlalchemy.orm import Session
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_anthropic import ChatAnthropic
 from langchain_groq import ChatGroq
+from langchain_core.tools import StructuredTool
 from groq import Groq
 
 from app.config import settings
@@ -116,25 +120,251 @@ def _build_system_prompt_from_base(base_prompt: str, language: str) -> str:
     )
 
 
-def build_system_prompt(first_arg, language: str = DEFAULT_LANGUAGE) -> str:
+def build_system_prompt(
+    first_arg,
+    language: str = DEFAULT_LANGUAGE,
+    user_id: Optional[int] = None,
+    db: Optional[Session] = None,
+) -> str:
     """Polymorphic system-prompt builder.
 
-    - New (agent_config, language): takes an AgentConfig-like object.
+    - New (agent_config, language, user_id, db): takes an AgentConfig-like object.
     - Legacy (base_prompt: str, language): takes a raw prompt string.
+
+    When `user_id` and `db` are provided alongside an AgentConfig-like object,
+    any existing AgentMemory for the (agent, user) pair is prepended as
+    PREVIOUS CONTEXT.
     """
     if isinstance(first_arg, str):
         return _build_system_prompt_from_base(first_arg, language)
+
+    agent_id = getattr(first_arg, "id", None)
     base = (
         getattr(first_arg, "system_prompt", None)
         or getattr(first_arg, "voice_system_prompt", None)
         or "You are a helpful voice assistant."
     )
-    return _build_system_prompt_from_base(base, language)
+
+    memory_text = ""
+    if user_id is not None and db is not None and agent_id is not None:
+        try:
+            from app.models.agent_memory import AgentMemory
+            mem = (
+                db.query(AgentMemory)
+                .filter(
+                    AgentMemory.agent_id == agent_id,
+                    AgentMemory.user_id == user_id,
+                )
+                .first()
+            )
+            if mem and mem.summary:
+                summary = mem.summary
+                if len(summary) > 600:
+                    summary = summary[:600]
+                memory_text = f"PREVIOUS CONTEXT (from earlier conversations with this user): {summary}\n\n"
+        except Exception:
+            pass
+
+    prompt = f"{memory_text}{base}"
+    return _build_system_prompt_from_base(prompt, language)
 
 
 # ---------------------------------------------------------------------------
 # New chat entry point (per-user API key)
 # ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Tool calling helpers
+# ---------------------------------------------------------------------------
+def _tool_parameters_schema_to_pydantic(name: str, parameters_schema: dict) -> type:
+    """Convert a JSON Schema object to a Pydantic model for StructuredTool."""
+    from pydantic import BaseModel, Field, create_model
+
+    properties = parameters_schema.get("properties", {})
+    required = set(parameters_schema.get("required", []))
+
+    fields = {}
+    for prop_name, prop_schema in properties.items():
+        prop_type_str = prop_schema.get("type", "string")
+        prop_desc = prop_schema.get("description", "")
+
+        if prop_type_str == "number":
+            py_type = float
+        elif prop_type_str == "integer":
+            py_type = int
+        elif prop_type_str == "boolean":
+            py_type = bool
+        elif prop_type_str == "array":
+            py_type = list
+        elif prop_type_str == "object":
+            py_type = dict
+        else:
+            py_type = str
+
+        is_required = prop_name in required
+        if is_required:
+            fields[prop_name] = (py_type, Field(description=prop_desc))
+        else:
+            from typing import Optional as Opt
+            fields[prop_name] = (Opt[py_type], Field(default=None, description=prop_desc))
+
+    if not fields:
+        from typing import Optional as Opt
+        fields["_dummy"] = (Opt[str], Field(default=None, description="No parameters"))
+
+    return create_model(f"{name}_args", **fields)
+
+
+def get_tools_for_agent(agent_config, db: Session) -> list:
+    """Load active AgentTool rows and convert to LangChain tool definitions."""
+    from app.models.agent_tool import AgentTool
+    from app.utils.tool_security import execute_tool_webhook
+
+    tool_rows = (
+        db.query(AgentTool)
+        .filter(AgentTool.agent_id == agent_config.id, AgentTool.is_active == True)
+        .all()
+    )
+
+    tools = []
+    for t in tool_rows:
+        args_schema = _tool_parameters_schema_to_pydantic(
+            t.name, t.parameters_schema or {}
+        )
+
+        target_url = t.target_url
+        http_method = t.http_method or "POST"
+
+        async def _run(**kwargs):
+            kwargs.pop("_dummy", None)
+            result = await execute_tool_webhook(
+                url=target_url,
+                http_method=http_method,
+                payload=kwargs,
+                session_id="",
+            )
+            return result["content"]
+
+        tool = StructuredTool(
+            name=t.name,
+            description=t.description,
+            args_schema=args_schema,
+            coroutine=_run,
+        )
+        tools.append(tool)
+
+    return tools
+
+
+async def chat_with_tools(
+    text: str,
+    agent_config,
+    api_key: str,
+    llm_provider: str = "gemini",
+    language: str = "en",
+    history: Optional[List[Any]] = None,
+    db: Optional[Session] = None,
+    user_id: Optional[int] = None,
+    session_id: str = "",
+) -> str:
+    """Run an LLM turn with tool calling support.
+
+    Up to 2 rounds: initial call -> tool results -> final answer.
+    Groq is excluded from tool calling (its LangChain integration lags).
+    """
+    if llm_provider == "groq":
+        return await chat_with_provider(text, agent_config, api_key, llm_provider, language, history)
+
+    from app.utils.tool_security import execute_tool_webhook, reset_tool_call_count
+    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
+
+    # Reset per-turn counter
+    reset_tool_call_count(session_id)
+
+    llm = get_llm(llm_provider, api_key)
+    system_prompt = build_system_prompt(agent_config, language, user_id=user_id, db=db)
+
+    # Load tools
+    tool_rows = []
+    from app.models.agent_tool import AgentTool
+    tool_rows = (
+        db.query(AgentTool)
+        .filter(AgentTool.agent_id == agent_config.id, AgentTool.is_active == True)
+        .all()
+    ) if db else []
+
+    if not tool_rows:
+        return await chat_with_provider(text, agent_config, api_key, llm_provider, language, history)
+
+    # Build LangChain tools
+    def _build_tool(row):
+        args_schema = _tool_parameters_schema_to_pydantic(row.name, row.parameters_schema or {})
+
+        async def _run(**kwargs):
+            kwargs.pop("_dummy", None)
+            result = await execute_tool_webhook(
+                url=row.target_url,
+                http_method=row.http_method or "POST",
+                payload=kwargs,
+                session_id=session_id,
+            )
+            return result["content"]
+
+        return StructuredTool(
+            name=row.name,
+            description=row.description,
+            args_schema=args_schema,
+            coroutine=_run,
+        )
+
+    lc_tools = [_build_tool(t) for t in tool_rows]
+    llm_with_tools = llm.bind_tools(lc_tools)
+
+    messages: List[Any] = [SystemMessage(content=system_prompt)]
+    for role, content in history or []:
+        if role == "human":
+            messages.append(HumanMessage(content=content))
+        elif role == "assistant":
+            messages.append(AIMessage(content=content))
+    messages.append(HumanMessage(content=text))
+
+    # Round 1: initial LLM call
+    response = await llm_with_tools.ainvoke(messages)
+
+    # Check for tool calls
+    if hasattr(response, "tool_calls") and response.tool_calls:
+        messages.append(response)
+        for tool_call in response.tool_calls:
+            tool_name = tool_call["name"]
+            tool_args = tool_call.get("args", {})
+            tool_id = tool_call.get("id", "")
+
+            tool_row = next((t for t in tool_rows if t.name == tool_name), None)
+            if tool_row:
+                result = await execute_tool_webhook(
+                    url=tool_row.target_url,
+                    http_method=tool_row.http_method or "POST",
+                    payload=tool_args,
+                    session_id=session_id,
+                )
+                messages.append(ToolMessage(content=result["content"], tool_call_id=tool_id))
+            else:
+                messages.append(ToolMessage(
+                    content=f"Error: Tool '{tool_name}' not found.",
+                    tool_call_id=tool_id,
+                ))
+
+        # Round 2: final answer
+        response = await llm_with_tools.ainvoke(messages)
+
+    raw = response.content
+    if isinstance(raw, list):
+        return "".join(
+            p.get("text", "") if isinstance(p, dict) else (str(p) if p else "")
+            for p in raw
+        )
+    return raw if isinstance(raw, str) else (str(raw) if raw else "")
+
+
 async def chat_with_provider(
     text: str,
     agent_config,

@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timedelta
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Request
@@ -16,7 +17,7 @@ from app.models.user import User, UserRole
 from app.models.agent_config import AgentConfig
 from app.schemas.user import (
     UserRegister, UserLogin, UserResponse, TokenResponse, UserUpdate, AdminUserUpdate,
-    AdminPasswordReset, UserPasswordReset
+    AdminPasswordReset, UserPasswordReset, GoogleLoginRequest
 )
 from app.services.notification_store import clear_notifications
 
@@ -79,19 +80,6 @@ characters in your responses — only plain spoken language."""
     )
     db.add(default_voice_agent)
 
-    # Also create the default Business Intelligence Agent
-    default_bi_agent = AgentConfig(
-        user_id=user.id,
-        name="Business Intelligence Agent",
-        description="Generate GTM strategies, competitor analysis, and business plans.",
-        agent_type="business_intel",
-        is_voice_agent=False,
-        tools_enabled=["web_search", "memory", "critic"],
-        output_format="markdown",
-        is_public=False,
-        is_template=False,
-    )
-    db.add(default_bi_agent)
     db.commit()
     # Create access token
     access_token = create_access_token(user.uuid, user.role.value)
@@ -108,7 +96,18 @@ characters in your responses — only plain spoken language."""
 def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
     # Find user by email
     user = db.query(User).filter(User.email == user_in.email).first()
-    if not user or not verify_password(user_in.password, user.hashed_password):
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if user.auth_provider != "local":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="This account uses Google Sign-In. Please continue with Google.",
+        )
+    if not verify_password(user_in.password, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
@@ -136,6 +135,130 @@ def login(request: Request, user_in: UserLogin, db: Session = Depends(get_db)):
         token_type="bearer",
         expires_in_minutes=get_settings().jwt_expire_minutes,
         user=UserResponse.model_validate(user),
+    )
+
+
+@router.post("/google", response_model=TokenResponse)
+@limiter.limit("10/minute")
+def google_login(request: Request, body: GoogleLoginRequest, db: Session = Depends(get_db)):
+    from google.oauth2 import id_token
+    from google.auth.transport import requests as google_requests
+
+    settings = get_settings()
+    token_val = body.token or body.credential
+    if not token_val:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token or credential field is required",
+        )
+
+    try:
+        payload = id_token.verify_oauth2_token(
+            token_val,
+            google_requests.Request(),
+            settings.google_client_id,
+        )
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid Google token",
+        )
+
+    if payload.get("email_verified") is False:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Google email not verified",
+        )
+
+    email = payload.get("email")
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google token does not contain email",
+        )
+
+    user = db.query(User).filter(User.email == email).first()
+    is_new = False
+
+    if user:
+        if user.auth_provider == "local":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="An account already exists with this email. Log in with your password.",
+            )
+        if not user.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Account is deactivated",
+            )
+        user.last_login = datetime.utcnow()
+    else:
+        is_new = True
+        name = payload.get("name", "")
+        if name:
+            base_username = name.replace(" ", "_").lower()
+        else:
+            base_username = email.split("@")[0].lower()
+        clean_username = "".join(c for c in base_username if c.isalnum() or c in ("_", "-"))
+        if len(clean_username) < 3:
+            clean_username = "user_" + clean_username
+
+        username = clean_username
+        while db.query(User).filter(User.username == username).first():
+            username = f"{clean_username}_{secrets.token_hex(2)}"
+
+        user = User(
+            email=email,
+            username=username,
+            hashed_password=hash_password(secrets.token_urlsafe(32)),
+            auth_provider="google",
+            role=UserRole.USER,
+            is_active=True,
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+        DEFAULT_VOICE_PROMPT = """You are a helpful, friendly, and concise AI voice assistant.
+You answer questions clearly and briefly since your responses will be spoken aloud.
+Keep responses under 3 sentences unless more detail is explicitly requested.
+Be conversational and natural. Never use markdown, bullet points, or special
+characters in your responses — only plain spoken language."""
+
+        default_voice_agent = AgentConfig(
+            user_id=user.id,
+            name="Default Voice Assistant",
+            description="Your personal AI voice assistant. Ask anything!",
+            agent_type="voice",
+            is_voice_agent=True,
+            voice_language="en",
+            voice_system_prompt=DEFAULT_VOICE_PROMPT,
+            tools_enabled=[],
+            output_format="text",
+            is_public=False,
+            is_template=False,
+            wake_word="Nova",
+        )
+        db.add(default_voice_agent)
+
+        db.commit()
+
+    access_token = create_access_token(user.uuid, user.role.value)
+    refresh_token = create_refresh_token()
+    user.refresh_token_hash = hash_refresh_token(refresh_token)
+    user.refresh_token_expires_at = datetime.utcnow() + timedelta(
+        days=settings.jwt_refresh_expire_days
+    )
+    user.last_activity_at = datetime.utcnow()
+    db.commit()
+
+    return TokenResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        token_type="bearer",
+        expires_in_minutes=settings.jwt_expire_minutes,
+        user=UserResponse.model_validate(user),
+        needs_api_key=is_new,
     )
 
 

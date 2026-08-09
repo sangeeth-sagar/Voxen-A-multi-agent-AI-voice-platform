@@ -118,12 +118,24 @@
               Awaiting neural input…
             </div>
             <div v-else class="space-y-2">
-              <p v-for="(msg, i) in transcript" :key="i">
-                <span :class="['font-bold mr-2', msg.role === 'user' ? 'text-primary' : 'text-secondary']">
-                  {{ msg.role === 'user' ? 'YOU:' : 'AGENT:' }}
-                </span>
-                <span :class="msg.role === 'user' ? 'text-on-surface-variant' : 'text-on-surface'">{{ msg.text }}</span>
-              </p>
+              <template v-for="(msg, i) in transcript" :key="i">
+                <!-- Tool Call Pill -->
+                <div v-if="msg.role === 'tool_call'"
+                     class="flex items-center gap-1.5 bg-surface-container-high/60 border border-outline-variant/30 rounded-full px-3 py-1 text-[11px] font-mono text-on-surface-variant mx-auto w-fit animate-fade-in my-1.5"
+                     :class="{ 'text-error bg-error/5 border-error/10': msg.status === 'error' }">
+                  <span class="material-symbols-outlined text-[12px] shrink-0">
+                    {{ msg.status === 'error' ? 'error' : 'build' }}
+                  </span>
+                  <span>{{ msg.text }}</span>
+                </div>
+                <!-- Speech Turns -->
+                <p v-else>
+                  <span :class="['font-bold mr-2', msg.role === 'user' ? 'text-primary' : 'text-secondary']">
+                    {{ msg.role === 'user' ? 'YOU:' : 'AGENT:' }}
+                  </span>
+                  <span :class="msg.role === 'user' ? 'text-on-surface-variant' : 'text-on-surface'">{{ msg.text }}</span>
+                </p>
+              </template>
               <p v-if="interimText" class="text-on-surface-variant/50 italic">{{ interimText }}</p>
             </div>
           </div>
@@ -280,6 +292,45 @@ function connectWebSocket() {
       case 'ready': 
         wsStatus.value = 'connected'; agentError.value = ''; 
         appendTerminalLog(`>> WS_GATEWAY: Core operational state reported ready.`); 
+        break
+      case 'tool_call':
+        if (msg.status === 'in_progress') {
+          transcript.value.push({
+            role: 'tool_call',
+            status: 'in_progress',
+            tool_name: msg.tool_name,
+            text: `Calling ${msg.tool_name}…`
+          })
+          appendTerminalLog(`>> NEURAL_CORE: Invoking custom tool: ${msg.tool_name}`)
+        } else if (msg.status === 'success') {
+          const idx = transcript.value.findIndex(t => t.role === 'tool_call' && t.tool_name === msg.tool_name && t.status === 'in_progress')
+          if (idx !== -1) {
+            transcript.value[idx].status = 'success'
+            transcript.value[idx].text = `${msg.tool_name}  ✓  ${msg.latency_ms}ms`
+          } else {
+            transcript.value.push({
+              role: 'tool_call',
+              status: 'success',
+              tool_name: msg.tool_name,
+              text: `${msg.tool_name}  ✓  ${msg.latency_ms}ms`
+            })
+          }
+          appendTerminalLog(`>> NEURAL_CORE: Tool ${msg.tool_name} completed in ${msg.latency_ms}ms`)
+        } else if (msg.status === 'error') {
+          const idx = transcript.value.findIndex(t => t.role === 'tool_call' && t.tool_name === msg.tool_name && t.status === 'in_progress')
+          if (idx !== -1) {
+            transcript.value[idx].status = 'error'
+            transcript.value[idx].text = `Tool failed — continuing without it`
+          } else {
+            transcript.value.push({
+              role: 'tool_call',
+              status: 'error',
+              tool_name: msg.tool_name,
+              text: `Tool failed — continuing without it`
+            })
+          }
+          appendTerminalLog(`>> NEURAL_CORE: Tool ${msg.tool_name} failed: ${msg.error}`)
+        }
         break
       case 'agent_thinking':
         isThinking.value = true; isStreaming.value = false; streamingBuffer = ''
@@ -529,14 +580,15 @@ onMounted(async () => {
   animateWave(); startSpeakingWatchdog()
   try {
     const data = await apiFetch('/api/v1/agents')
-    userAgents.value = Array.isArray(data) ? data : (data?.agents || data?.items || [])
+    const allList = Array.isArray(data) ? data : (data?.agents || data?.items || [])
+    userAgents.value = allList.filter(a => a.is_voice_agent)
     const saved = localStorage.getItem('active_agent')
     const savedExists = userAgents.value.find(a => a.uuid === saved)
     if (savedExists) { activeAgentUuid.value = saved }
     else if (userAgents.value.length > 0) {
-      const firstVoice = userAgents.value.find(a => a.is_voice_agent) || userAgents.value[0]
+      const firstVoice = userAgents.value[0]
       activeAgentUuid.value = firstVoice.uuid; localStorage.setItem('active_agent', firstVoice.uuid)
-    } else { activeAgentUuid.value = null; agentError.value = 'No agents found. Create one in Voice Lab first.'; return }
+    } else { activeAgentUuid.value = null; agentError.value = 'No voice agents found. Create one in Voice Lab first.'; return }
     connectWebSocket(); await checkSTTSupport()
   } catch (err) { agentError.value = 'Failed to load agents: ' + (err.message || err) }
   detectVoiceStatus()

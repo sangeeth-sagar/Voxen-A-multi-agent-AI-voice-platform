@@ -1,6 +1,6 @@
-# AgentIQ Neural OS
+# Voxen Voice OS
 
-AgentIQ is a multi-agent AI voice platform that lets users create, configure, and deploy custom voice assistants powered by their own LLM API keys (Gemini, OpenAI, Claude). Features include real-time voice conversations via WebSocket, knowledge-base-backed agents, webhook integrations, and usage analytics.
+Voxen is a multi-agent AI voice platform that lets users create, configure, and deploy custom voice assistants powered by their own LLM API keys (Gemini, OpenAI, Claude). Features include real-time voice conversations via WebSocket, knowledge-base-backed agents, webhook integrations, and usage analytics.
 
 ## Key pages
 

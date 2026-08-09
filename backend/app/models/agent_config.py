@@ -35,6 +35,8 @@ class AgentConfig(Base):
     is_active            = Column(Boolean, default=False)
     webhook_id           = Column(String, nullable=True, unique=True)
     webhook_url          = Column(String, nullable=True)
+    webhook_mode         = Column(String, default="sync", server_default="sync")
+    output_schema        = Column(JSON, nullable=True)
     # Knowledge base
     kb_enabled           = Column(Boolean, default=False)
     kb_collection_name   = Column(String, nullable=True)
@@ -48,4 +50,12 @@ class AgentConfig(Base):
         default="How can I help you today?"
     )
 
+    memory_enabled = Column(Boolean, default=True)
+    organization_id = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
+
+    organization = relationship("Organization", back_populates="agent_configs")
+    custom_tools = relationship("AgentTool", back_populates="agent", cascade="all, delete-orphan")
+    memory = relationship("AgentMemory", back_populates="agent", cascade="all, delete-orphan")
     user = relationship("User", back_populates="agent_configs")
+    knowledge_bases = relationship("AgentKnowledgeBase", back_populates="agent", cascade="all, delete-orphan")
+    telegram_bot_configs = relationship("TelegramBotConfig", back_populates="agent", cascade="all, delete-orphan")

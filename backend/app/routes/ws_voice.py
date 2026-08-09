@@ -36,12 +36,13 @@ from app.models.agent_config import AgentConfig
 from app.models.agent_key_assignment import AgentApiKeyAssignment
 from app.models.user_api_key import UserApiKey
 from app.utils.encryption import decrypt_key
-from app.llm_router import get_llm, build_system_prompt
+from app.llm_router import get_llm, build_system_prompt, chat_with_tools
 from app.tts_router import synthesize
-from app.services.rag import retrieve_context
+from app.services.rag import retrieve_context, resolve_user_gemini_key
 from app.utils.llm_utils import extract_text_from_content
 from app.models.api_call import ApiCall
 from app.services.notification_store import add_notification
+from app.services.memory import summarize_session
 
 logger = logging.getLogger(__name__)
 
@@ -164,44 +165,75 @@ async def voice_websocket(
                 llm_start = time.time()
                 full_response = ""
                 llm = get_llm(assignment.llm_provider or "gemini", llm_key)
-                system_prompt = build_system_prompt(agent, language)
+                system_prompt = build_system_prompt(agent, language, user_id=agent.user_id, db=db)
 
-                # Inject KB context into system_prompt if the agent has a
-                # knowledge base collection attached.
-                kb_context = ""
-                if agent.kb_collection_name:
-                    try:
-                        kb_context = await retrieve_context(agent.kb_collection_name, text)
-                    except Exception as kb_err:
-                        logger.warning(f"KB retrieval failed: {kb_err}")
+                # Check if agent has custom tools
+                from app.models.agent_tool import AgentTool
+                has_tools = db.query(AgentTool).filter(
+                    AgentTool.agent_id == agent.id, AgentTool.is_active == True
+                ).first() is not None
 
-                if kb_context:
-                    system_prompt += f"\n\nKNOWLEDGE BASE CONTEXT:\n{kb_context}\n"
+                if has_tools:
+                    # Use consolidated tool-calling path
+                    history_tuples = list(conversation_history)
+                    full_response = await chat_with_tools(
+                        text=text,
+                        agent_config=agent,
+                        api_key=llm_key,
+                        llm_provider=assignment.llm_provider or "gemini",
+                        language=language,
+                        history=history_tuples,
+                        db=db,
+                        user_id=agent.user_id,
+                        session_id=session_id,
+                    )
+                    await websocket.send_json({"type": "agent_token", "token": full_response})
+                    await websocket.send_json({
+                        "type": "agent_response_complete",
+                        "text": full_response[:1000],
+                    })
+                else:
+                    # Streaming path (no tools)
+                    from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
-                messages = (
-                    [("system", system_prompt)]
-                    + list(conversation_history)
-                    + [("human", text)]
-                )
+                    kb_context = ""
+                    if agent.kb_collection_name:
+                        try:
+                            api_key = resolve_user_gemini_key(db, agent.user_id)
+                            kb_context = await retrieve_context(agent.kb_collection_name, text, api_key=api_key)
+                        except Exception as kb_err:
+                            logger.warning(f"KB retrieval failed: {kb_err}")
 
-                async for chunk in llm.astream(messages):
-                    # chunk.content can be str or list[dict] in Gemini 3.1
-                    raw = chunk.content
-                    if isinstance(raw, list):
-                        token = "".join(
-                            p.get("text", "") if isinstance(p, dict) else (str(p) if p else "")
-                            for p in raw
-                        )
-                    elif isinstance(raw, str):
-                        token = raw
-                    else:
-                        token = str(raw) if raw else ""
+                    if kb_context:
+                        system_prompt += f"\n\nKNOWLEDGE BASE CONTEXT:\n{kb_context}\n"
 
-                    if token:
-                        full_response += token
-                        await websocket.send_json(
-                            {"type": "agent_token", "token": token}
-                        )
+                    messages = [SystemMessage(content=system_prompt)]
+                    for role, content in conversation_history:
+                        if role == "human":
+                            messages.append(HumanMessage(content=content))
+                        elif role == "assistant":
+                            messages.append(AIMessage(content=content))
+                    messages.append(HumanMessage(content=text))
+
+                    async for chunk in llm.astream(messages):
+                        raw = chunk.content
+                        if isinstance(raw, list):
+                            token = "".join(
+                                p.get("text", "") if isinstance(p, dict) else (str(p) if p else "")
+                                for p in raw
+                            )
+                        elif isinstance(raw, str):
+                            token = raw
+                        else:
+                            token = str(raw) if raw else ""
+                        if token:
+                            full_response += token
+                            await websocket.send_json({"type": "agent_token", "token": token})
+
+                    await websocket.send_json({
+                        "type": "agent_response_complete",
+                        "text": full_response[:1000] if len(full_response) > 1000 else full_response,
+                    })
 
                 llm_ms = (time.time() - llm_start) * 1000
 
@@ -371,3 +403,11 @@ async def voice_websocket(
             )
         except Exception:
             pass
+    finally:
+        try:
+            if 'agent' in locals() and agent and 'session_id' in locals() and session_id:
+                asyncio.create_task(
+                    summarize_session(agent.id, agent.user_id, session_id)
+                )
+        except Exception as e:
+            logger.warning(f"Memory summarization scheduling failed: {e}")

@@ -28,7 +28,8 @@ class Settings(BaseSettings):
     database_url: str = "postgresql://postgres:postgres@localhost:5432/agentiq"
 
     # API keys
-    google_api_key: str = ""   # not used — users add their own keys via Profile UI
+    google_api_key: str = ""
+    google_client_id: str = ""   # not used — users add their own keys via Profile UI
     secret_key: str = "change-me-in-production-use-32-chars"
     groq_api_key: str = ""
 

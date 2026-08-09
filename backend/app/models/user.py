@@ -26,6 +26,7 @@ class User(Base):
     role             = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
     is_active        = Column(Boolean, default=True, server_default="true", nullable=False)
     is_superadmin    = Column(Boolean, default=False, server_default="false", nullable=False)
+    auth_provider    = Column(String(20), default="local", server_default="local", nullable=False)
     total_jobs       = Column(Integer, default=0)
     total_tokens     = Column(Integer, default=0)
     total_cost_usd   = Column(Float, default=0.0)
@@ -34,7 +35,9 @@ class User(Base):
     refresh_token_hash      = Column(String, nullable=True)
     refresh_token_expires_at = Column(DateTime, nullable=True)
     last_activity_at        = Column(DateTime, nullable=True)
+    organization_id          = Column(Integer, ForeignKey("organizations.id"), nullable=True, index=True)
 
+    organization = relationship("Organization", back_populates="users")
     plans        = relationship("Plan", back_populates="user",
                                 foreign_keys="Plan.user_id")
     agent_configs = relationship("AgentConfig", back_populates="user")

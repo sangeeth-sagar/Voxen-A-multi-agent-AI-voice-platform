@@ -15,6 +15,9 @@ from app.schemas.agent_config import (
 )
 from app.config import get_settings
 from app.services.notification_store import add_notification
+from app.models.agent_tool import AgentTool
+from app.models.agent_memory import AgentMemory
+from app.schemas.agent_tool import AgentToolCreate, AgentToolUpdate, AgentToolResponse
 
 router = APIRouter()
 
@@ -555,7 +558,7 @@ async def upload_kb_file(
     Only works if kb_enabled is True.
     Only the agent owner can upload.
     """
-    from app.services.rag import create_kb_collection, ingest_file
+    from app.services.rag import create_kb_collection, ingest_file, resolve_user_gemini_key
     import structlog
 
     agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
@@ -578,12 +581,15 @@ async def upload_kb_file(
             detail="Knowledge base is not enabled for this agent",
         )
 
+    # Resolve Gemini API key for embeddings
+    api_key = resolve_user_gemini_key(db, current_user.id)
+
     # Create KB collection if it doesn't exist
     collection_name = agent.kb_collection_name
     if collection_name is None:
         collection_name = f"agent_{agent.uuid}_kb"
         # Create the collection
-        collection_name = await create_kb_collection(collection_name)
+        collection_name = await create_kb_collection(collection_name, api_key=api_key)
         # Update agent
         agent.kb_collection_name = collection_name
         db.add(agent)
@@ -594,7 +600,7 @@ async def upload_kb_file(
     file_bytes = file.file.read()
 
     # Ingest the file
-    chunk_count = await ingest_file(collection_name, file_bytes, file.filename)
+    chunk_count = await ingest_file(collection_name, file_bytes, file.filename, api_key=api_key)
     
     # Log upload
     logger = structlog.get_logger()
@@ -681,3 +687,326 @@ async def get_agent_sessions(
     sessions = await get_user_sessions(db, current_user.id, agent.id)
 
     return sessions
+
+
+# ---------------------------------------------------------------------------
+# Agent Tools Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{agent_uuid}/tools", response_model=List[AgentToolResponse])
+def get_agent_tools(
+    agent_uuid: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    return agent.custom_tools
+
+@router.post("/{agent_uuid}/tools", response_model=AgentToolResponse, status_code=201)
+def create_agent_tool(
+    agent_uuid: str,
+    tool_in: AgentToolCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    tool = AgentTool(
+        agent_id=agent.id,
+        name=tool_in.name,
+        description=tool_in.description,
+        webhook_url=tool_in.webhook_url,
+        parameters=tool_in.parameters,
+        is_active=tool_in.is_active,
+    )
+    db.add(tool)
+    db.commit()
+    db.refresh(tool)
+    return tool
+
+@router.put("/{agent_uuid}/tools/{tool_uuid}", response_model=AgentToolResponse)
+def update_agent_tool(
+    agent_uuid: str,
+    tool_uuid: str,
+    tool_in: AgentToolUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    tool = db.query(AgentTool).filter(AgentTool.uuid == tool_uuid, AgentTool.agent_id == agent.id).first()
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+
+    if tool_in.name is not None:
+        tool.name = tool_in.name
+    if tool_in.description is not None:
+        tool.description = tool_in.description
+    if tool_in.webhook_url is not None:
+        tool.webhook_url = tool_in.webhook_url
+    if tool_in.parameters is not None:
+        tool.parameters = tool_in.parameters
+    if tool_in.is_active is not None:
+        tool.is_active = tool_in.is_active
+
+    db.commit()
+    db.refresh(tool)
+    return tool
+
+@router.delete("/{agent_uuid}/tools/{tool_uuid}")
+def delete_agent_tool(
+    agent_uuid: str,
+    tool_uuid: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+
+    tool = db.query(AgentTool).filter(AgentTool.uuid == tool_uuid, AgentTool.agent_id == agent.id).first()
+    if not tool:
+        raise HTTPException(status_code=404, detail="Tool not found")
+
+    db.delete(tool)
+    db.commit()
+    return {"message": "Tool deleted successfully"}
+
+class ToolTestRequest(PydanticBaseModel):
+    webhook_url: str
+    parameters: dict = {}
+
+@router.post("/{agent_uuid}/tools/test")
+async def test_tool_webhook(
+    agent_uuid: str,
+    body: ToolTestRequest,
+    current_user: User = Depends(get_current_user),
+):
+    import httpx
+    import time
+    
+    webhook_url = body.webhook_url
+    # Localhost / private IP validation
+    from urllib.parse import urlparse
+    parsed = urlparse(webhook_url)
+    hostname = parsed.hostname or ""
+    
+    if hostname in ("localhost", "127.0.0.1", "0.0.0.0") or hostname.startswith("192.168.") or hostname.startswith("10.") or hostname.startswith("172.16.") or hostname.endswith(".local"):
+        return {
+            "status": "error",
+            "message": "Localhost and private IPs are blocked",
+            "latency_ms": 0,
+            "success": False
+        }
+        
+    start_time = time.time()
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(webhook_url, json=body.parameters, timeout=5.0)
+            latency_ms = int((time.time() - start_time) * 1000)
+            return {
+                "status": "success",
+                "status_code": response.status_code,
+                "response_text": response.text[:1000],  # truncated
+                "latency_ms": latency_ms,
+                "success": response.status_code == 200
+            }
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        return {
+            "status": "error",
+            "message": str(e),
+            "latency_ms": latency_ms,
+            "success": False
+        }
+
+
+# ---------------------------------------------------------------------------
+# Agent Memory Endpoints
+# ---------------------------------------------------------------------------
+
+@router.get("/{agent_uuid}/memory")
+def get_agent_memory(
+    agent_uuid: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    memory = agent.memory
+    return {"summary": memory.summary if memory else ""}
+
+@router.delete("/{agent_uuid}/memory")
+def delete_agent_memory(
+    agent_uuid: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    if agent.memory:
+        db.delete(agent.memory)
+        db.commit()
+    return {"message": "Memory cleared successfully"}
+
+
+# ---------------------------------------------------------------------------
+# Agent Knowledge Base Endpoints
+# ---------------------------------------------------------------------------
+class KBUrlRequest(PydanticBaseModel):
+    url: str
+
+@router.post("/{agent_uuid}/kb/file")
+async def upload_kb_file(
+    agent_uuid: str,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    content = await file.read()
+    filename = file.filename or "unknown.txt"
+    
+    from app.services.document_parser import parse_pdf_bytes
+    from app.services.rag_engine import ingest_kb_document
+    
+    try:
+        if filename.lower().endswith(".pdf"):
+            text = await parse_pdf_bytes(content)
+        else:
+            text = content.decode("utf-8", errors="ignore")
+            
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Document text is empty")
+            
+        chunks_count = await ingest_kb_document(
+            db=db,
+            agent_id=agent.id,
+            source_type="file",
+            source_name=filename,
+            raw_text=text
+        )
+        
+        agent.kb_enabled = True
+        db.commit()
+        
+        return {"message": f"Successfully parsed and ingested {chunks_count} chunks", "chunks": chunks_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/{agent_uuid}/kb/url")
+async def add_kb_url(
+    agent_uuid: str,
+    body: KBUrlRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    from app.services.document_parser import parse_url
+    from app.services.rag_engine import ingest_kb_document
+    
+    try:
+        text = await parse_url(body.url)
+        if not text.strip():
+            raise HTTPException(status_code=400, detail="Scraped web content is empty")
+            
+        chunks_count = await ingest_kb_document(
+            db=db,
+            agent_id=agent.id,
+            source_type="url",
+            source_name=body.url,
+            raw_text=text
+        )
+        
+        agent.kb_enabled = True
+        db.commit()
+        
+        return {"message": f"Successfully scraped and ingested {chunks_count} chunks", "chunks": chunks_count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/{agent_uuid}/kb")
+def list_kb_documents(
+    agent_uuid: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    from app.models.agent_knowledge_base import AgentKnowledgeBase
+    docs = db.query(AgentKnowledgeBase).filter(AgentKnowledgeBase.agent_id == agent.id).all()
+    return [
+        {
+            "id": d.id,
+            "source_type": d.source_type,
+            "source_name": d.source_name,
+            "total_chunks": d.total_chunks,
+            "created_at": d.created_at
+        }
+        for d in docs
+    ]
+
+
+@router.delete("/{agent_uuid}/kb/{kb_id}")
+def delete_kb_document(
+    agent_uuid: str,
+    kb_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    agent = db.query(AgentConfig).filter(AgentConfig.uuid == agent_uuid).first()
+    if not agent:
+        raise HTTPException(status_code=404, detail="Agent not found")
+    if agent.user_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    from app.models.agent_knowledge_base import AgentKnowledgeBase
+    doc = db.query(AgentKnowledgeBase).filter(
+        AgentKnowledgeBase.id == kb_id,
+        AgentKnowledgeBase.agent_id == agent.id
+    ).first()
+    
+    if not doc:
+        raise HTTPException(status_code=404, detail="Knowledge base source not found")
+        
+    db.delete(doc)
+    db.commit()
+    return {"message": "Document removed successfully"}

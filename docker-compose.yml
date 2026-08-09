@@ -12,7 +12,7 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - ./schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
+      - ./backend/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql
 
   redis:
     image: redis:7-alpine
@@ -22,13 +22,13 @@ services:
 
   backend:
     build:
-      context: .
+      context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - ./backend/.env
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/agentiq
       REDIS_URL: redis://redis:6379
@@ -36,7 +36,7 @@ services:
       - db
       - redis
     volumes:
-      - ./static:/app/static
+      - ./backend/static:/app/static
 
   frontend:
     image: node:20-alpine
@@ -45,7 +45,7 @@ services:
     ports:
       - "5173:5173"
     volumes:
-      - ../frontend:/app
+      - ./frontend:/app
     command: sh -c "npm install && npm run dev -- --host"
     environment:
       VITE_API_URL: http://localhost:8000
