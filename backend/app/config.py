@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # Security
     jwt_secret: str = "change-me-to-32-char-random-string-in-production"
-    jwt_expire_minutes: int = 10    # 10 minutes — short-lived access token
+    jwt_expire_minutes: int = 30    # 30 minutes
     jwt_refresh_expire_days: int = 7  # 7 days — refresh token lifetime
 
     # Limits

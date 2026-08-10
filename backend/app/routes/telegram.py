@@ -1,5 +1,6 @@
 import httpx
 import structlog
+import redis
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
@@ -13,6 +14,14 @@ from app.services.chat_core import run_chat_core
 from app.config import settings
 
 logger = structlog.get_logger(__name__)
+
+# Setup Redis or memory-based deduplication
+try:
+    redis_client = redis.from_url(settings.redis_url, socket_timeout=2.0)
+except Exception:
+    redis_client = None
+
+processed_update_ids = set()
 
 router = APIRouter(prefix="/api/v1/telegram", tags=["telegram-gateway"])
 
@@ -69,6 +78,39 @@ async def telegram_webhook(
         update = await request.json()
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid payload")
+
+    # Deduplicate based on Telegram's update_id
+    update_id = update.get("update_id")
+    if update_id:
+        is_duplicate = False
+        if redis_client:
+            try:
+                # setnx returns True if key was set, False if key already exists
+                key = f"tg_update:{update_id}"
+                success = redis_client.set(key, "1", ex=60, nx=True)
+                if not success:
+                    is_duplicate = True
+            except Exception as redis_err:
+                logger.warning("redis_deduplication_failed", error=str(redis_err))
+                # Fallback to in-memory set
+                if update_id in processed_update_ids:
+                    is_duplicate = True
+                else:
+                    processed_update_ids.add(update_id)
+                    if len(processed_update_ids) > 10000:
+                        processed_update_ids.clear()
+        else:
+            # Fallback to in-memory set
+            if update_id in processed_update_ids:
+                is_duplicate = True
+            else:
+                processed_update_ids.add(update_id)
+                if len(processed_update_ids) > 10000:
+                    processed_update_ids.clear()
+
+        if is_duplicate:
+            logger.info("telegram_webhook_ignored_duplicate", update_id=update_id)
+            return {"status": "ignored", "reason": "duplicate update"}
 
     message = update.get("message")
     if not message:
