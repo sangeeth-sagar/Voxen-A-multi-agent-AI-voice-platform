@@ -19,6 +19,10 @@ CREATE TABLE IF NOT EXISTS api_calls (
     audio_duration_seconds DOUBLE PRECISION,
     characters_count    INTEGER,
     language        TEXT DEFAULT 'en',
+    tool_name             TEXT,
+    tool_target_url       TEXT,
+    tool_status_code      INTEGER,
+    tool_latency_ms       DOUBLE PRECISION,
     created_at      TIMESTAMP DEFAULT now()
 );
 

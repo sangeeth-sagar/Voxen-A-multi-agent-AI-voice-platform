@@ -73,6 +73,15 @@ with engine.begin() as conn:
         print("Successfully ensured output_schema on agent_configs")
     except Exception as e:
         print(f"Failed to add output_schema to agent_configs: {e}")
+
+    try:
+        conn.execute(text("ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tool_name VARCHAR"))
+        conn.execute(text("ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tool_target_url VARCHAR"))
+        conn.execute(text("ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tool_status_code INTEGER"))
+        conn.execute(text("ALTER TABLE api_calls ADD COLUMN IF NOT EXISTS tool_latency_ms DOUBLE PRECISION"))
+        print("Successfully ensured tool columns on api_calls")
+    except Exception as e:
+        print(f"Failed to add tool columns to api_calls: {e}")
 # =====================================================================
 
 app = FastAPI(
