@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Voxen AI Assistant Sandbox</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&family=JetBrains+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet">
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --card-bg: rgba(30, 41, 59, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --success: #22c55e;
+      --error: #ef4444;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(139, 92, 246, 0.15) 0%, transparent 40%);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      overflow-x: hidden;
+    }
+
+    .sandbox-container {
+      width: 100%;
+      max-width: 680px;
+      background: var(--card-bg);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid var(--border-color);
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+      animation: fadeIn 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+
+    .logo-container {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 64px;
+      height: 64px;
+      background: linear-gradient(135deg, var(--primary), #8b5cf6);
+      border-radius: 20px;
+      margin-bottom: 16px;
+      box-shadow: 0 8px 16px rgba(99, 102, 241, 0.3);
+    }
+
+    .logo-container span {
+      font-size: 32px;
+      color: white;
+    }
+
+    h1 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+      background: linear-gradient(135deg, #fff 60%, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    header p {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .config-form {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    label {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+    }
+
+    input, select {
+      width: 100%;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14px;
+      color: var(--text-main);
+      outline: none;
+      transition: all 0.2s ease;
+    }
+
+    input:focus, select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    }
+
+    .select-wrapper {
+      position: relative;
+    }
+
+    .select-wrapper select {
+      appearance: none;
+      -webkit-appearance: none;
+      cursor: pointer;
+    }
+
+    .select-wrapper::after {
+      content: 'unfold_more';
+      font-family: 'Material Symbols Outlined';
+      position: absolute;
+      right: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+      font-size: 18px;
+    }
+
+    .btn-submit {
+      width: 100%;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 12px;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: all 0.2s ease;
+      margin-top: 10px;
+    }
+
+    .btn-submit:hover {
+      background: var(--primary-hover);
+      transform: translateY(-1px);
+    }
+
+    .btn-submit:active {
+      transform: translateY(0);
+    }
+
+    .status-panel {
+      margin-top: 24px;
+      padding: 14px 18px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+      display: none;
+      align-items: flex-start;
+      gap: 10px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .status-panel.success {
+      display: flex;
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid rgba(34, 197, 94, 0.2);
+      color: #86efac;
+    }
+
+    .status-panel.error {
+      display: flex;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #fca5a5;
+    }
+
+    .status-panel span.icon {
+      font-size: 18px;
+      margin-top: 1px;
+    }
+
+    .instructions-card {
+      margin-top: 32px;
+      border-top: 1px solid var(--border-color);
+      padding-top: 24px;
+    }
+
+    .instructions-card h3 {
+      font-family: 'Outfit', sans-serif;
+      font-size: 15px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--text-main);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .instructions-card h3 span {
+      color: var(--primary);
+      font-size: 18px;
+    }
+
+    .instructions-card ul {
+      list-style: none;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .instructions-card li {
+      font-size: 13px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      line-height: 1.4;
+    }
+
+    .instructions-card li::before {
+      content: '•';
+      color: var(--primary);
+      font-weight: bold;
+      font-size: 15px;
+      line-height: 1;
+    }
+
+    footer.page-footer {
+      margin-top: 32px;
+      text-align: center;
+      font-size: 11px;
+      color: var(--text-muted);
+      opacity: 0.7;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="sandbox-container">
+    <header>
+      <div class="logo-container">
+        <span class="material-symbols-outlined">settings_voice</span>
+      </div>
+      <h1>Voxen Assistant Sandbox</h1>
+      <p>Configure, launch, and test your chatbot and voice agent web-widgets seamlessly.</p>
+    </header>
+
+    <div class="config-form">
+      <div class="input-group">
+        <label for="agent-id">Agent UUID</label>
+        <input type="text" id="agent-id" placeholder="e.g. 5460d7c6-5230-488f-aee4-556647f196be" />
+      </div>
+
+      <div class="input-group">
+        <label for="api-url-select">API Backend Environment</label>
+        <div class="select-wrapper">
+          <select id="api-url-select" onchange="onEnvironmentChange()">
+            <option value="https://voxen-backend-tg2n.onrender.com">Production Server (Render)</option>
+            <option value="http://localhost:8000">Local Development (http://localhost:8000)</option>
+            <option value="custom">Custom URL...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="input-group" id="custom-url-group" style="display: none;">
+        <label for="api-url-custom">Custom API Backend URL</label>
+        <input type="text" id="api-url-custom" placeholder="https://api.yourdomain.com" />
+      </div>
+
+      <button onclick="loadWidget()" class="btn-submit">
+        <span class="material-symbols-outlined">rocket_launch</span>
+        Load AI Assistant Widget
+      </button>
+    </div>
+
+    <div id="status-panel" class="status-panel">
+      <span class="material-symbols-outlined icon" id="status-icon">info</span>
+      <div id="status-text">Ready to launch.</div>
+    </div>
+
+    <div class="instructions-card">
+      <h3><span class="material-symbols-outlined">help_outline</span>Testing Instructions</h3>
+      <ul>
+        <li>Enter your Agent's UUID (found in the Agents tab of your dashboard).</li>
+        <li>Select the backend URL. Make sure your local Uvicorn process is running if you select Localhost.</li>
+        <li>Click <strong>Load AI Assistant Widget</strong>. A blue chat bubble will appear in the bottom-right corner.</li>
+        <li>Open the bubble. You can type text messages directly, or click the <strong>Microphone Button</strong> to test the real-time AI Voice streaming integration!</li>
+      </ul>
+    </div>
+  </div>
+
+  <footer class="page-footer">
+    &copy; 2026 Voxen AI Voice Platform &middot; Built for Pair Programming
+  </footer>
+
+  <script>
+    function onEnvironmentChange() {
+      const select = document.getElementById('api-url-select');
+      const customGroup = document.getElementById('custom-url-group');
+      if (select.value === 'custom') {
+        customGroup.style.display = 'flex';
+      } else {
+        customGroup.style.display = 'none';
+      }
+    }
+
+    function getApiUrl() {
+      const select = document.getElementById('api-url-select');
+      if (select.value === 'custom') {
+        return document.getElementById('api-url-custom').value.trim();
+      }
+      return select.value;
+    }
+
+    function showStatus(message, isSuccess) {
+      const panel = document.getElementById('status-panel');
+      const text = document.getElementById('status-text');
+      const icon = document.getElementById('status-icon');
+
+      text.textContent = message;
+      panel.className = 'status-panel ' + (isSuccess ? 'success' : 'error');
+      icon.textContent = isSuccess ? 'check_circle' : 'error';
+    }
+
+    function loadWidget() {
+      const agentId = document.getElementById('agent-id').value.trim();
+      const apiUrl = getApiUrl();
+
+      if (!agentId) {
+        showStatus("Agent UUID is required to launch the widget.", false);
+        return;
+      }
+      if (!apiUrl) {
+        showStatus("API Backend URL is required.", false);
+        return;
+      }
+
+      // Remove existing widget if already loaded
+      if (window.VoiceAgentWidget) {
+        try {
+          window.VoiceAgentWidget.destroy();
+        } catch (e) {
+          console.error("Error destroying old widget:", e);
+        }
+      }
+
+      // Clear any dynamically appended script
+      const oldScript = document.getElementById('voxen-widget-script');
+      if (oldScript) oldScript.remove();
+
+      showStatus("Loading widget script from backend...", true);
+
+      // Create script tag dynamically
+      const script = document.createElement('script');
+      script.id = 'voxen-widget-script';
+      script.src = `${apiUrl}/static/widget.js`;
+
+      script.onload = function() {
+        try {
+          if (!window.VoiceAgentWidget) {
+            throw new Error("VoiceAgentWidget class was not found in loaded script.");
+          }
+          window.VoiceAgentWidget.init({
+            agentId: agentId,
+            apiUrl: apiUrl,
+            position: "bottom-right",
+            theme: "dark",
+            title: "Voxen AI Assistant",
+            subtitle: "Speaks English, Hindi, Malayalam...",
+            primaryColor: "#6366f1"
+          });
+          showStatus("Widget loaded successfully! Click the bubble in the bottom-right corner to start chatting or speaking.", true);
+        } catch (err) {
+          showStatus("Initialization error: " + err.message, false);
+        }
+      };
+
+      script.onerror = function() {
+        showStatus(`Failed to load widget.js from ${apiUrl}/static/widget.js. Make sure the server is running and CORS is allowed.`, false);
+      };
+
+      document.body.appendChild(script);
+    }
+  </script>
+</body>
+</html>

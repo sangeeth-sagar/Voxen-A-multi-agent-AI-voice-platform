@@ -82,6 +82,14 @@ with engine.begin() as conn:
         print("Successfully ensured tool columns on api_calls")
     except Exception as e:
         print(f"Failed to add tool columns to api_calls: {e}")
+
+    try:
+        conn.execute(text("ALTER TABLE agent_tools ADD COLUMN IF NOT EXISTS uuid VARCHAR(36) UNIQUE DEFAULT gen_random_uuid()::text"))
+        conn.execute(text("ALTER TABLE agent_tools ADD COLUMN IF NOT EXISTS http_method VARCHAR(10) DEFAULT 'POST'"))
+        conn.execute(text("ALTER TABLE agent_tools ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT TRUE"))
+        print("Successfully ensured columns on agent_tools")
+    except Exception as e:
+        print(f"Failed to add columns to agent_tools: {e}")
 # =====================================================================
 
 app = FastAPI(
